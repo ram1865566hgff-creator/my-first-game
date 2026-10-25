@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Богатырь: Путь через Сказку</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #111; font-family: 'Segoe UI', Tahoma, sans-serif; touch-action: none; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #ui-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    background: rgba(15, 10, 5, 0.85); color: #fff; z-index: 10; text-align: center; padding: 20px;
+  }
+  .panel {
+    background: linear-gradient(180deg, #5c3a21 0%, #382010 100%);
+    border: 4px solid #d4af37; border-radius: 14px; padding: 24px; max-width: 520px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+  }
+  h1 { color: #ffd700; font-size: 28px; margin-bottom: 10px; text-shadow: 2px 2px 0 #000; }
+  p { font-size: 15px; line-height: 1.45; margin-bottom: 14px; color: #f5e6c8; }
+  .controls-info {
+    background: rgba(0,0,0,0.35); border-radius: 8px; padding: 12px; margin-bottom: 18px;
+    text-align: left; font-size: 14px; border: 1px solid #8a6642;
+  }
+  .controls-info div { margin-bottom: 6px; }
+  .btn {
+    background: linear-gradient(180deg, #e63946 0%, #a81c28 100%);
+    color: #fff; border: 3px solid #ffd700; padding: 14px 32px; font-size: 20px;
+    font-weight: bold; border-radius: 10px; cursor: pointer; text-shadow: 1px 1px 0 #000;
+  }
+  .btn:active { transform: scale(0.96); }
+  #hud {
+    position: absolute; top: 10px; left: 12px; right: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    pointer-events: none; z-index: 5; color: #fff; font-weight: bold;
+    font-size: 16px; text-shadow: 2px 2px 0 #000;
+  }
+  .hud-box {
+    background: rgba(40, 22, 10, 0.78); border: 2px solid #d4af37;
+    padding: 6px 12px; border-radius: 8px; pointer-events: auto;
+  }
+  #calib-btn {
+    background: #3d5a80; color: #fff; border: 2px solid #98c1d9;
+    padding: 5px 10px; border-radius: 6px; font-size: 13px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="hud" style="display:none;">
+  <div class="hud-box" id="hud-stats">❤️ 3 | 🪙 0 | Уровень: 1/5</div>
+  <div class="hud-box" id="hud-level">Деревня</div>
+  <button id="calib-btn" onclick="calibrateTilt()">Сброс наклона</button>
+</div>
+
+<div id="ui-overlay">
+  <div class="panel">
+    <h1 id="menu-title">БОГАТЫРЬ: ПУТЬ ЧЕРЕЗ СКАЗКУ</h1>
+    <p id="menu-desc">Пройди 5 уровней через русскую деревню и дремучий лес, одолей нечисть сказочную и победи Змея Горыныча!</p>
+    <div class="controls-info">
+      <div>👉 <b>Правая часть экрана:</b> идти вперёд</div>
+      <div>👈 <b>Левая часть экрана:</b> идти назад</div>
+      <div>📱 <b>Наклон экрана назад (на себя):</b> прыжок вверх!</div>
+      <div>☝️ <i>Запасной прыжок: резкий свайп вверх или пробел на ПК</i></div>
+    </div>
+    <button class="btn" id="start-btn" onclick="startGame()">В БОЙ, БОГАТЫРЬ!</button>
+  </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let W = window.innerWidth;
+let H = window.innerHeight;
+canvas.width = W;
+canvas.height = H;
+
+window.addEventListener('resize', () => {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W;
+  canvas.height = H;
+});
+
+// Звуковой синтезатор (Web Audio API без внешних файлов)
+let audioCtx = null;
+function playSound(type) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+
+    if (type === 'jump') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(420, now + 0.18);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.18);
+      osc.start(now); osc.stop(now + 0.18);
+    } else if (type === 'coin') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(587, now);
+      osc.frequency.setValueAtTime(880, now + 0.07);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.22);
+      osc.start(now); osc.stop(now + 0.22);
+    } else if (type === 'stomp') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.15);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+      osc.start(now); osc.stop(now + 0.15);
+    } else if (type === 'hurt') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(200, now);
+      osc.frequency.linearRampToValueAtTime(80, now + 0.3);
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+      osc.start(now); osc.stop(now + 0.3);
+    } else if (type === 'win') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.setValueAtTime(554, now + 0.1);
+      osc.frequency.setValueAtTime(659, now + 0.2);
+      osc.frequency.setValueAtTime(880, now + 0.3);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
+      osc.start(now); osc.stop(now + 0.5);
+    }
+  } catch (e) {}
+}
+
+// Состояние управления
+const input = { left: false, right: false, jump: false };
+let baseTilt = null;
+let lastTiltJump = 0;
+
+function triggerJump() {
+  const now = performance.now();
+  if (now - lastTiltJump > 320) {
+    input.jump = true;
+    lastTiltJump = now;
+  }
+}
+
+function calibrateTilt() {
+  baseTilt = null;
+}
+
+// Обработка гироскопа и акселерометра (наклон экрана назад/на себя -> прыжок)
+window.addEventListener('deviceorientation', (e) => {
+  if (!gameRunning) return;
+  // В зависимости от ориентации экрана отслеживаем наклон по осям beta и gamma
+  const isLandscape = W > H;
+  const currentAngle = isLandscape ? e.gamma : e.beta;
+  if (currentAngle === null || currentAngle === undefined) return;
+
+  if (baseTilt === null) {
+    baseTilt = currentAngle;
+    return;
+  }
+
+  const diff = currentAngle - baseTilt;
+  // Наклон телефона назад / вверх вызывает отклонение угла более чем на 11 градусов
+  if (Math.abs(diff) > 11) {
+    triggerJump();
+    // Плавно подстраиваем базовый угол после прыжка
+    baseTilt = currentAngle * 0.6 + baseTilt * 0.4;
+  } else {
+    // Медленная автокалибровка к текущему положению рук
+    baseTilt = baseTilt * 0.97 + currentAngle * 0.03;
+  }
+});
+
+// Дополнительный детектор резкого рывка экрана на себя через акселерометр
+window.addEventListener('devicemotion', (e) => {
+  if (!gameRunning || !e.accelerationIncludingGravity) return;
+  const acc = e.accelerationIncludingGravity;
+  const rot = e.rotationRate;
+  if (rot && (Math.abs(rot.alpha) > 130 || Math.abs(rot.beta) > 130)) {
+    triggerJump();
+  } else if (acc && acc.z !== null && acc.z > 12.2) {
+    triggerJump();
+  }
+});
+
+// Сенсорное управление: левая половина экрана = назад, правая половина = вперед
+let touchStartY = {};
+function updateTouches(e) {
+  if (!gameRunning) return;
+  input.left = false;
+  input.right = false;
+  for (let i = 0; i < e.touches.length; i++) {
+    const t = e.touches[i];
+    if (t.clientX < W / 2) {
+      input.left = true;
+    } else {
+      input.right = true;
+    }
+  }
+}
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    touchStartY[t.identifier] = t.clientY;
+  }
+  updateTouches(e);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    const startY = touchStartY[t.identifier];
+    // Запасной вариант: свайп вверх тоже делает прыжок
+    if (startY !== undefined && startY - t.clientY > 45) {
+      triggerJump();
+      touchStartY[t.identifier] = t.clientY;
+    }
+  }
+  updateTouches(e);
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    delete touchStartY[e.changedTouches[i].identifier];
+  }
+  updateTouches(e);
+}, { passive: false });
+
+// Клавиатура для теста на ПК
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+  if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') triggerJump();
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+});
+
+// Описание 5 уровней
+const LEVELS = [
+  {
+    name: "1. Окраина Деревни",
+    theme: "village_day",
+    skyTop: "#4ea8de", skyBot: "#caf0f8", groundCol: "#52b788", dirtCol: "#7f4f24",
+    length: 3000,
+    enemyTypes: ["kolobok", "imp"]
+  },
+  {
+    name: "2. Вечерние Мельницы",
+    theme: "village_sunset",
+    skyTop: "#9b2226", skyBot: "#ee9b00", groundCol: "#ca6702", dirtCol: "#582f0e",
+    length: 3400,
+    enemyTypes: ["kikimora", "kolobok"]
+  },
+  {
+    name: "3. Берёзовая Роща",
+    theme: "birch_forest",
+    skyTop: "#2ec4b6", skyBot: "#cbf3f0", groundCol: "#38b000", dirtCol: "#4a2c11",
+    length: 3800,
+    enemyTypes: ["wolf", "leshy"]
+  },
+  {
+    name: "4. Чаща Бабы-Яги",
+    theme: "dark_forest",
+    skyTop: "#10002b", skyBot: "#3c096c", groundCol: "#2d6a4f", dirtCol: "#1b4332",
+    length: 4200,
+    enemyTypes: ["babayaga", "leshy", "wolf"]
+  },
+  {
+    name: "5. Логово Горыныча",
+    theme: "boss_forest",
+    skyTop: "#370617", skyBot: "#9d0208", groundCol: "#495057", dirtCol: "#212529",
+    length: 4400,
+    enemyTypes: ["skeleton", "babayaga", "gorynych"]
+  }
+];
+
+let gameRunning = false;
+let currentLevelIdx = 0;
+let coins = 0;
+let lives = 3;
+let cameraX = 0;
+
+let player = {};
+let platforms = [];
+let enemies = [];
+let collectibles = [];
+let fireballs = [];
+let particles = [];
+let goalX = 2800;
+
+function initLevel(idx) {
+  const lvl = LEVELS[idx];
+  const groundY = H - 70;
+
+  player = {
+    x: 100, y: groundY - 70,
+    w: 48, h: 68,
+    vx: 0, vy: 0,
+    speed: 6.2,
+    jumpForce: -14.8,
+    onGround: false,
+    facing: 1,
+    animTimer: 0,
+    invuln: 0
+  };
+
+  platforms = [];
+  enemies = [];
+  collectibles = [];
+  fireballs = [];
+  particles = [];
+  cameraX = 0;
+  goalX = lvl.length - 220;
+
+  // Генерация земли с ямами и мосточками
+  let curX = 0;
+  while (curX < lvl.length) {
+    const segW = (curX === 0 || curX > lvl.length - 600) ? 700 : 350 + Math.random() * 350;
+    platforms.push({ x: curX, y: groundY, w: segW, h: 120, type: 'ground' });
+
+    // Деревянные помосты и кирпичи в воздухе (как в Марио)
+    if (curX > 250 && curX < lvl.length - 500) {
+      const platCount = 1 + Math.floor(Math.random() * 2);
+      for (let p = 0; p < platCount; p++) {
+        const px = curX + 60 + p * 180;
+        const py = groundY - 110 - (p % 2) * 75;
+        const pw = 110 + Math.random() * 60;
+        platforms.push({ x: px, y: py, w: pw, h: 24, type: 'wood' });
+
+        // Калачи/монеты над платформой
+        for (let c = 0; c < 3; c++) {
+          collectibles.push({ x: px + 20 + c * 35, y: py - 35, r: 12, collected: false });
+        }
+      }
+
+      // Добавление сказочных врагов на участке
+      const eType = lvl.enemyTypes[Math.floor(Math.random() * (lvl.enemyTypes.length === 3 && idx === 4 ? 2 : lvl.enemyTypes.length))];
+      const ex = curX + 180 + Math.random() * 140;
+      spawnEnemy(eType, ex, groundY, curX + 40, curX + segW - 40);
+    }
+
+    const gap = (curX === 0 || curX > lvl.length - 750) ? 0 : 95 + Math.random() * 45;
+    curX += segW + gap;
+  }
+
+  // На 5-м уровне перед теремом охраняет Змей Горыныч
+  if (idx === 4) {
+    spawnEnemy('gorynych', goalX - 280, groundY, goalX - 480, goalX - 80);
+  }
+
+  updateHUD();
+}
+
+function spawnEnemy(type, x, groundY, minX, maxX) {
+  if (type === 'kolobok') {
+    enemies.push({ type, name: 'Злой Колобок', x, y: groundY - 38, w: 38, h: 38, vx: 2.6, minX, maxX, hp: 1, angle: 0 });
+  } else if (type === 'imp') {
+    enemies.push({ type, name: 'Чёртик', x, y: groundY - 48, w: 36, h: 48, vx: 2.2, vy: 0, minX, maxX, hp: 1, groundY });
+  } else if (type === 'kikimora') {
+    enemies.push({ type, name: 'Кикимора', x, y: groundY - 52, w: 40, h: 52, vx: 3.0, minX, maxX, hp: 1 });
+  } else if (type === 'wolf') {
+    enemies.push({ type, name: 'Серый Волк', x, y: groundY - 46, w: 58, h: 46, vx: 4.1, minX, maxX, hp: 1 });
+  } else if (type === 'leshy') {
+    enemies.push({ type, name: 'Леший', x, y: groundY - 72, w: 46, h: 72, vx: 2.4, minX, maxX, hp: 1 });
+  } else if (type === 'babayaga') {
+    enemies.push({ type, name: 'Баба-Яга', x, y: groundY - 135, baseY: groundY - 135, w: 48, h: 64, vx: 2.8, minX, maxX, hp: 1, phase: Math.random() * 6 });
+  } else if (type === 'skeleton') {
+    enemies.push({ type, name: 'Кощеев Страж', x, y: groundY - 64, w: 42, h: 64, vx: 3.2, minX, maxX, hp: 1 });
+  } else if (type === 'gorynych') {
+    enemies.push({ type, name: 'Змей Горыныч', x, y: groundY - 110, w: 110, h: 110, vx: 2.2, minX, maxX, hp: 3, maxHp: 3, fireTimer: 0 });
+  }
+}
+
+function updateHUD() {
+  document.getElementById('hud-stats').textContent = `❤️ ${lives} | 🪙 ${coins} | Ур: ${currentLevelIdx + 1}/5`;
+  document.getElementById('hud-level').textContent = LEVELS[currentLevelIdx].name;
+}
+
+function startGame() {
+  // Запрос разрешения датчиков наклона для новых мобильных браузеров
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().catch(() => {});
+  }
+  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    DeviceMotionEvent.requestPermission().catch(() => {});
+  }
+
+  document.getElementById('ui-overlay').style.display = 'none';
+  document.getElementById('hud').style.display = 'flex';
+  if (lives <= 0 || currentLevelIdx >= LEVELS.length) {
+    lives = 3;
+    coins = 0;
+    currentLevelIdx = 0;
+  }
+  baseTilt = null;
+  initLevel(currentLevelIdx);
+  gameRunning = true;
+}
+
+function showMenu(title, desc, btnText) {
+  gameRunning = false;
+  document.getElementById('menu-title').textContent = title;
+  document.getElementById('menu-desc').textContent = desc;
+  document.getElementById('start-btn').textContent = btnText;
+  document.getElementById('ui-overlay').style.display = 'flex';
+}
+
+function spawnParticles(x, y, color) {
+  for (let i = 0; i < 12; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 8,
+      vy: (Math.random() - 0.8) * 8,
+      life: 25,
+      color
+    });
+  }
+}
+
+function update() {
+  if (!gameRunning) return;
+
+  const groundY = H - 70;
+  for (let p of platforms) {
+    if (p.type === 'ground') p.y = groundY;
+  }
+
+  // Движение Богатыря
+  if (input.left) {
+    player.vx = -player.speed;
+    player.facing = -1;
+    player.animTimer += 0.22;
+  } else if (input.right) {
+    player.vx = player.speed;
+    player.facing = 1;
+    player.animTimer += 0.22;
+  } else {
+    player.vx *= 0.75;
+    if (Math.abs(player.vx) < 0.2) player.vx = 0;
+  }
+
+  if (input.jump && player.onGround) {
+    player.vy = player.jumpForce;
+    player.onGround = false;
+    input.jump = false;
+    playSound('jump');
+  }
+  input.jump = false;
+
+  // Гравитация
+  player.vy += 0.68;
+  if (player.vy > 15) player.vy = 15;
+
+  player.x += player.vx;
+  if (player.x < 10) player.x = 10;
+
+  player.y += player.vy;
+  player.onGround = false;
+
+  // Коллизия с платформами
+  for (let p of platforms) {
+    if (
+      player.x + player.w > p.x &&
+      player.x < p.x + p.w &&
+      player.y + player.h >= p.y &&
+      player.y + player.h - player.vy <= p.y + 18 &&
+      player.vy >= 0
+    ) {
+      player.y = p.y - player.h;
+      player.vy = 0;
+      player.onGround = true;
+    }
+  }
+
+  if (player.invuln > 0) player.invuln--;
+
+  // Падение в пропасть
+  if (player.y > H + 80) {
+    loseLife();
+    return;
+  }
+
+  // Сбор золотых монет / калачей
+  for (let c of collectibles) {
+    if (!c.collected) {
+      const dx = (player.x + player.w / 2) - c.x;
+      const dy = (player.y + player.h / 2) - c.y;
+      if (Math.hypot(dx, dy) < 34) {
+        c.collected = true;
+        coins++;
+        playSound('coin');
+        spawnParticles(c.x, c.y, '#ffd700');
+        updateHUD();
+      }
+    }
+  }
+
+  // Логика врагов
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    e.x += e.vx;
+    if (e.x < e.minX) { e.x = e.minX; e.vx = Math.abs(e.vx); }
+    if (e.x + e.w > e.maxX) { e.x = e.maxX - e.w; e.vx = -Math.abs(e.vx); }
+
+    if (e.type === 'kolobok') {
+      e.angle += e.vx * 0.08;
+    } else if (e.type === 'babayaga') {
+      e.phase += 0.06;
+      e.y = e.baseY + Math.sin(e.phase) * 38;
+    } else if (e.type === 'gorynych') {
+      e.fireTimer++;
+      if (e.fireTimer > 110) {
+        e.fireTimer = 0;
+        fireballs.push({
+          x: e.x, y: e.y + 35,
+          vx: -6.5, vy: (Math.random() - 0.5) * 2,
+          r: 12
+        });
+      }
+    }
+
+    // Проверка столкновения с Богатырём
+    if (
+      player.x + player.w - 6 > e.x &&
+      player.x + 6 < e.x + e.w &&
+      player.y + player.h > e.y &&
+      player.y < e.y + e.h
+    ) {
+      // Прыжок Богатыря сверху на врага (как в Марио)
+      if (player.vy > 0 && player.y + player.h - player.vy <= e.y + 28) {
+        player.vy = -11.5;
+        e.hp--;
+        playSound('stomp');
+        spawnParticles(e.x + e.w / 2, e.y + e.h / 2, '#ff9f1c');
+        if (e.hp <= 0) {
+          enemies.splice(i, 1);
+          coins += (e.type === 'gorynych' ? 20 : 5);
+          updateHUD();
+        }
+      } else if (player.invuln <= 0) {
+        loseLife();
+        return;
+      }
+    }
+  }
+
+  // Огненные шары Горыныча
+  for (let i = fireballs.length - 1; i >= 0; i--) {
+    const f = fireballs[i];
+    f.x += f.vx;
+    f.y += f.vy;
+    if (Math.hypot((player.x + player.w / 2) - f.x, (player.y + player.h / 2) - f.y) < f.r + 20) {
+      if (player.invuln <= 0) {
+        loseLife();
+        return;
+      }
+    }
+    if (f.x < cameraX - 100) fireballs.splice(i, 1);
+  }
+
+  // Частицы
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const pt = particles[i];
+    pt.x += pt.vx;
+    pt.y += pt.vy;
+    pt.life--;
+    if (pt.life <= 0) particles.splice(i, 1);
+  }
+
+  // Камера плавно следует за Богатырём
+  const targetCam = player.x - W * 0.32;
+  cameraX += (targetCam - cameraX) * 0.12;
+  if (cameraX < 0) cameraX = 0;
+  const maxCam = LEVELS[currentLevelIdx].length - W;
+  if (cameraX > maxCam) cameraX = maxCam;
+
+  // Достижение терема (конца уровня)
+  if (player.x + player.w > goalX) {
+    // На 5 уровне нужно победить Горыныча
+    const bossAlive = enemies.some(e => e.type === 'gorynych');
+    if (!bossAlive) {
+      playSound('win');
+      currentLevelIdx++;
+      if (currentLevelIdx >= LEVELS.length) {
+        showMenu(
+          "ПОБЕДА! РУСЬ СПАСЕНА!",
+          `Богатырь прошёл все 5 уровней, одолел нечисть и Змея Горыныча! Собрано золота: ${coins}`,
+          "СЫГРАТЬ СНОВА"
+        );
+      } else {
+        initLevel(currentLevelIdx);
+      }
+    }
+  }
+}
+
+function loseLife() {
+  playSound('hurt');
+  lives--;
+  updateHUD();
+  if (lives <= 0) {
+    showMenu(
+      "ПОРАЖЕНИЕ",
+      "Одолела нечисть сказочная... Но русский богатырь не сдаётся!",
+      "НАЧАТЬ ЗАНОВО"
+    );
+  } else {
+    player.x = Math.max(80, player.x - 180);
+    player.y = 60;
+    player.vx = 0;
+    player.vy = 0;
+    player.invuln = 75;
+  }
+}
+
+// Отрисовка мира, деревни, леса, Богатыря и врагов
+function draw() {
+  const lvl = LEVELS[currentLevelIdx] || LEVELS[0];
+  const groundY = H - 70;
+
+  // Небо
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, lvl.skyTop);
+  grad.addColorStop(1, lvl.skyBot);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+
+  // Декорации фона (Русская деревня / Лес)
+  drawBackgroundDecor(lvl, groundY);
+
+  // Платформы и земля
+  for (let p of platforms) {
+    if (p.type === 'ground') {
+      ctx.fillStyle = lvl.dirtCol;
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillStyle = lvl.groundCol;
+      ctx.fillRect(p.x, p.y, p.w, 16);
+    } else {
+      // Бревенчатый помост
+      ctx.fillStyle = '#8d5524';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = '#4a2c11';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(p.x, p.y, p.w, p.h);
+    }
+  }
+
+  // Финишный расписной Русский Терем
+  drawTerem(goalX, groundY);
+
+  // Монеты / золотые калачи
+  for (let c of collectibles) {
+    if (!c.collected) {
+      ctx.fillStyle = '#ffd700';
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#b58300';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+  }
+
+  // Отрисовка сказочных врагов
+  for (let e of enemies) {
+    drawEnemy(e);
+  }
+
+  // Огненные шары
+  for (let f of fireballs) {
+    ctx.fillStyle = '#ff4800';
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffba08';
+    ctx.beginPath();
+    ctx.arc(f.x + 3, f.y, f.r * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Мускулистый Богатырь
+  if (player.invuln % 6 < 4) {
+    drawBogatyr(player);
+  }
+
+  // Частицы
+  for (let pt of particles) {
+    ctx.fillStyle = pt.color;
+    ctx.fillRect(pt.x, pt.y, 5, 5);
+  }
+
+  ctx.restore();
+
+  // Подсказка зон нажатия по краям экрана
+  if (gameRunning) {
+    ctx.fillStyle = input.left ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)';
+    ctx.fillRect(0, 0, W / 2, H);
+    ctx.fillStyle = input.right ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)';
+    ctx.fillRect(W / 2, 0, W / 2, H);
+  }
+}
+
+function drawBackgroundDecor(lvl, groundY) {
+  for (let x = 120; x < lvl.length - 300; x += 260) {
+    if (lvl.theme === 'village_day' || lvl.theme === 'village_sunset') {
+      // Деревянная изба с резной крышей
+      ctx.fillStyle = '#7f4f24';
+      ctx.fillRect(x, groundY - 95, 110, 95);
+      // Брёвна
+      ctx.strokeStyle = '#582f0e';
+      ctx.lineWidth = 2;
+      for (let by = groundY - 80; by < groundY; by += 16) {
+        ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x + 110, by); ctx.stroke();
+      }
+      // Крыша
+      ctx.fillStyle = '#a4161a';
+      ctx.beginPath();
+      ctx.moveTo(x - 15, groundY - 95);
+      ctx.lineTo(x + 55, groundY - 150);
+      ctx.lineTo(x + 125, groundY - 95);
+      ctx.closePath();
+      ctx.fill();
+      // Светящееся окошко со ставнями
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(x + 38, groundY - 65, 34, 34);
+      ctx.strokeStyle = '#fff';
+      ctx.strokeRect(x + 38, groundY - 65, 34, 34);
+      // Деревенский плетень
+      ctx.fillStyle = '#9c6644';
+      ctx.fillRect(x + 125, groundY - 35, 95, 25);
+    } else if (lvl.theme === 'birch_forest') {
+      // Русские берёзы
+      ctx.fillStyle = '#f8f9fa';
+      ctx.fillRect(x, groundY - 190, 24, 190);
+      ctx.fillStyle = '#212529';
+      for (let b = 0; b < 6; b++) {
+        ctx.fillRect(x + (b % 2) * 10, groundY - 30 - b * 28, 12, 5);
+      }
+      ctx.fillStyle = '#52b788';
+      ctx.beginPath();
+      ctx.arc(x + 12, groundY - 195, 55, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Дремучие ели в лесу
+      ctx.fillStyle = '#3d2516';
+      ctx.fillRect(x + 25, groundY - 60, 20, 60);
+      ctx.fillStyle = lvl.theme === 'dark_forest' ? '#1b4332' : '#2b2d42';
+      for (let tier = 0; tier < 3; tier++) {
+        ctx.beginPath();
+        ctx.moveTo(x - 20 + tier * 8, groundY - 50 - tier * 48);
+        ctx.lineTo(x + 35, groundY - 115 - tier * 48);
+        ctx.lineTo(x + 90 - tier * 8, groundY - 50 - tier * 48);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function drawTerem(x, groundY) {
+  // Высокий сказочный терем в конце уровня
+  ctx.fillStyle = '#9c6644';
+  ctx.fillRect(x, groundY - 160, 140, 160);
+  ctx.fillStyle = '#d62828';
+  ctx.beginPath();
+  ctx.moveTo(x - 20, groundY - 160);
+  ctx.lineTo(x + 70, groundY - 240);
+  ctx.lineTo(x + 160, groundY - 160);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#ffd700';
+  ctx.fillRect(x + 48, groundY - 70, 44, 70);
+}
+
+function drawBogatyr(p) {
+  ctx.save();
+  ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
+  ctx.scale(p.facing, 1);
+
+  const walkSwing = p.onGround && Math.abs(p.vx) > 0.3 ? Math.sin(p.animTimer) * 7 : 0;
+
+  // Развевающийся красный плащ за спиной
+  ctx.fillStyle = '#c1121f';
+  ctx.beginPath();
+  ctx.moveTo(-10, -14);
+  ctx.lineTo(-28 - Math.abs(p.vx) * 1.5, 22);
+  ctx.lineTo(-8, 24);
+  ctx.closePath();
+  ctx.fill();
+
+  // Сапоги
+  ctx.fillStyle = '#9b2226';
+  ctx.fillRect(-14 + walkSwing, 18, 12, 16);
+  ctx.fillRect(4 - walkSwing, 18, 12, 16);
+
+  // Широкий мускулистый торс в кольчуге
+  ctx.fillStyle = '#adb5bd';
+  ctx.fillRect(-19, -14, 38, 34);
+  // Золотой пояс с бляхой
+  ctx.fillStyle = '#ffd700';
+  ctx.fillRect(-19, 10, 38, 6);
+
+  // Могучие мускулистые руки (бицепсы)
+  ctx.fillStyle = '#f4a261';
+  ctx.beginPath();
+  ctx.arc(-21, -2, 10, 0, Math.PI * 2);
+  ctx.arc(21, -2, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Голова и окладистая борода
+  ctx.fillStyle = '#f4a261';
+  ctx.fillRect(-11, -30, 22, 16);
+  ctx.fillStyle = '#582f0e'; // Густая борода
+  ctx.beginPath();
+  ctx.moveTo(-13, -20);
+  ctx.lineTo(13, -20);
+  ctx.lineTo(0, -6);
+  ctx.closePath();
+  ctx.fill();
+
+  // Глаза
+  ctx.fillStyle = '#000';
+  ctx.fillRect(3, -25, 4, 4);
+
+  // Богатырский шлем (шелом)
+  ctx.fillStyle = '#ffd700';
+  ctx.beginPath();
+  ctx.moveTo(-14, -27);
+  ctx.lineTo(0, -45);
+  ctx.lineTo(14, -27);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawEnemy(e) {
+  ctx.save();
+  if (e.type === 'kolobok') {
+    ctx.translate(e.x + e.w / 2, e.y + e.h / 2);
+    ctx.rotate(e.angle);
+    ctx.fillStyle = '#ffb703';
+    ctx.beginPath();
+    ctx.arc(0, 0, e.w / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#d00000';
+    ctx.fillRect(-8, -6, 5, 5);
+    ctx.fillRect(3, -6, 5, 5);
+  } else if (e.type === 'kikimora' || e.type === 'leshy') {
+    ctx.fillStyle = e.type === 'leshy' ? '#3a5a40' : '#588157';
+    ctx.fillRect(e.x, e.y, e.w, e.h);
+    ctx.fillStyle = '#a3b18a';
+    ctx.fillRect(e.x + 4, e.y + 16, e.w - 8, 18); // Борода из мха
+    ctx.fillStyle = '#ffbe0b';
+    ctx.fillRect(e.x + 8, e.y + 8, 6, 6);
+    ctx.fillRect(e.x + e.w - 14, e.y + 8, 6, 6);
+  } else if (e.type === 'wolf') {
+    ctx.fillStyle = '#6c757d';
+    ctx.fillRect(e.x, e.y + 10, e.w, e.h - 10);
+    ctx.fillRect(e.x + (e.vx > 0 ? e.w - 18 : 0), e.y, 18, 20);
+    ctx.fillStyle = '#e63946';
+    ctx.fillRect(e.x + (e.vx > 0 ? e.w - 6 : 2), e.y + 5, 4, 4);
+  } else if (e.type === 'babayaga') {
+    // Ступа
+    ctx.fillStyle = '#6c3c1c';
+    ctx.fillRect(e.x + 8, e.y + 26, e.w - 16, 38);
+    // Баба-Яга
+    ctx.fillStyle = '#7209b7';
+    ctx.fillRect(e.x + 12, e.y, e.w - 24, 28);
+    ctx.fillStyle = '#9ef01a';
+    ctx.fillRect(e.x + 16, e.y + 6, 16, 14);
+  } else if (e.type === 'gorynych') {
+    // Туловище Змея Горыныча
+    ctx.fillStyle = '#2b9348';
+    ctx.fillRect(e.x + 20, e.y + 35, e.w - 20, e.h - 35);
+    // 3 головы на шеях
+    for (let h = 0; h < 3; h++) {
+      ctx.fillStyle = '#55a630';
+      ctx.fillRect(e.x + h * 26, e.y + (h % 2) * 10, 24, 42);
+      ctx.fillStyle = '#d00000';
+      ctx.fillRect(e.x + h * 26 + 4, e.y + 8, 6, 6);
+    }
+    // Полоска здоровья босса
+    ctx.fillStyle = '#000';
+    ctx.fillRect(e.x, e.y - 16, e.w, 8);
+    ctx.fillStyle = '#e63946';
+    ctx.fillRect(e.x, e.y - 16, (e.hp / e.maxHp) * e.w, 8);
+  } else {
+    // Чёртик / Скелет
+    ctx.fillStyle = e.type === 'skeleton' ? '#e9ecef' : '#3d405b';
+    ctx.fillRect(e.x, e.y, e.w, e.h);
+    ctx.fillStyle = '#e63946';
+    ctx.fillRect(e.x + 8, e.y + 10, 6, 6);
+    ctx.fillRect(e.x + e.w - 14, e.y + 10, 6, 6);
+  }
+  ctx.restore();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
