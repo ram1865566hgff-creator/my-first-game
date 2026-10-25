@@ -10,38 +10,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Скачивание файлов из репозитория
+      - name: Скачивание файлов
         uses: actions/checkout@v4
 
-      - name: Настройка Java 17
+      - name: Настройка Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Настройка Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Установка пакетов Android SDK 34
-        run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
-      - name: Настройка Node.js и Cordova
+      - name: Настройка Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Упаковка игры в Android-проект и сборка APK
+      - name: Сборка Android APK
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
           npm install -g cordova
-          cordova create app ru.bogatyr.game "Богатырь"
+          cordova create app ru.bogatyr.game "Bogatyr"
           cp index.html app/www/index.html
           cd app
-          cordova platform add android@13.0.0
+          cordova platform add android
           cordova build android --debug
 
-      - name: Выгрузка готового файла APK
+      - name: Выгрузка готового APK
         uses: actions/upload-artifact@v4
         with:
           name: Bogatyr-Android-APK
