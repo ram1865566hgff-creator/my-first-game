@@ -1,42 +1,42 @@
-name: Build Bogatyr Android APK
-
+name: Build Iron Front Android
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ironfront-reborn]
   workflow_dispatch:
-
+permissions:
+  contents: write
 jobs:
-  build-apk:
+  android:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Скачивание файлов
-        uses: actions/checkout@v4
-
-      - name: Настройка Java
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
-
-      - name: Настройка Node.js
-        uses: actions/setup-node@v4
+      - uses: android-actions/setup-android@v3
         with:
-          node-version: '20'
-
-      - name: Сборка Android APK
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
+          packages: 'platforms;android-35 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Generate illustrated environments and sound
         run: |
-          npm install -g cordova
-          cordova create app ru.bogatyr.game "Bogatyr"
-          cp index.html app/www/index.html
-          cd app
-          cordova platform add android
-          cordova build android --debug
-
-      - name: Выгрузка готового APK
-        uses: actions/upload-artifact@v4
+          python3 -m pip install --quiet Pillow
+          ART_OUT="$GITHUB_WORKSPACE/app/src/main/assets" python3 gen_art.py
+          find app/src/main/assets -type f | wc -l
+      - name: Compile Android game
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Prepare and upload APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk IronFront.apk
+      - uses: actions/upload-artifact@v4
         with:
-          name: Bogatyr-Android-APK
-          path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          name: IronFront-APK
+          path: IronFront.apk
+          if-no-files-found: error
+      - name: Publish direct APK download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ironfront-v1
+          name: Iron Front — Android v1.0
+          body: 'Native offline action platformer. Three illustrated zones, weapon pickups, responsive multitouch controls, several enemy types, three bosses, original music and sound effects.'
+          files: IronFront.apk
+          make_latest: false
