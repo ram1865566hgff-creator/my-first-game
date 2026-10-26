@@ -25,6 +25,7 @@ jobs:
           java-version: '17'
       - name: Install SDK platform
         run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
           "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
