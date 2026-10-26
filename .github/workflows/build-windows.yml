@@ -3,6 +3,9 @@ on:
   push:
     branches: [slidevoice-windows]
   workflow_dispatch:
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: '1'
 permissions:
   contents: read
 jobs:
