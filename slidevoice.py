@@ -47,7 +47,7 @@ def focused_on_slidevoice():
 class SlaidVpered(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Слайд вперед — голосовые слайды")
+        self.title("Слайд вперед — управляй голосом")
         self.geometry("800x690")
         self.minsize(660, 520)
         self.configure(bg=DARK)
