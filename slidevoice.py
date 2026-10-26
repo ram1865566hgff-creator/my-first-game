@@ -48,8 +48,8 @@ class SlaidVpered(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Слайд вперед — голосовые слайды")
-        self.geometry("1020x930")
-        self.minsize(790, 600)
+        self.geometry("800x690")
+        self.minsize(660, 520)
         self.configure(bg=DARK)
         app_icon = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "assets" / "slide-vpered.ico"
         if app_icon.is_file():
@@ -85,12 +85,12 @@ class SlaidVpered(tk.Tk):
         pale = "#e8f2ff"
         pale_deep = "#e2eefc"
         self.configure(bg=bg)
-        self.geometry("1020x930")
-        self.minsize(790, 600)
+        self.geometry("800x690")
+        self.minsize(660, 520)
 
         # Scrollable page stays usable at 1366x768 and with Windows text scaling.
         shell = tk.Frame(self, bg=bg)
-        shell.pack(fill="both", expand=True, padx=15, pady=12)
+        shell.pack(fill="both", expand=True, padx=9, pady=8)
         canvas = tk.Canvas(shell, bg=paper, bd=0, highlightthickness=1,
                            highlightbackground="#d5e3f2")
         bar = ttk.Scrollbar(shell, orient="vertical", command=canvas.yview)
@@ -113,68 +113,68 @@ class SlaidVpered(tk.Tk):
                             font=("Segoe UI", size, weight), **kw)
 
         # Brand block: top developer byline and logo with oversized title.
-        lbl(body, "Разработчик: Рамазанов Роман Валерьевич", 15,
-            ink, "bold").pack(pady=(15, 6))
+        lbl(body, "Разработчик: Рамазанов Роман Валерьевич", 12,
+            ink, "bold").pack(pady=(10, 3))
         hero = tk.Frame(body, bg=paper)
-        hero.pack(fill="x", padx=35, pady=(0, 13))
+        hero.pack(fill="x", padx=20, pady=(0, 8))
         asset = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
         logo = asset / "assets" / "slide-vpered-art.jpg"
         if logo.is_file():
             try:
                 from PIL import Image, ImageTk
-                art = Image.open(logo).convert("RGBA").resize((144, 144),
+                art = Image.open(logo).convert("RGBA").resize((94, 94),
                                                Image.Resampling.LANCZOS)
                 self._brand_image = ImageTk.PhotoImage(art)
                 tk.Label(hero, image=self._brand_image, bg=paper).pack(
-                    side="left", padx=(5, 25))
+                    side="left", padx=(4, 15))
             except Exception:
-                lbl(hero, "▣", 65, blue).pack(side="left", padx=(15, 38))
+                lbl(hero, "▣", 48, blue).pack(side="left", padx=(10, 22))
         else:
-            lbl(hero, "▣", 65, blue).pack(side="left", padx=(15, 38))
+            lbl(hero, "▣", 48, blue).pack(side="left", padx=(10, 22))
         hero_words = tk.Frame(hero, bg=paper)
-        hero_words.pack(side="left", fill="both", expand=True, pady=17)
-        lbl(hero_words, "Слайд вперед", 42, "#082f88", "bold",
+        hero_words.pack(side="left", fill="both", expand=True, pady=8)
+        lbl(hero_words, "Слайд вперед", 31, "#082f88", "bold",
             anchor="w").pack(anchor="w")
-        lbl(hero_words, "Голосовое управление презентациями", 17, muted,
+        lbl(hero_words, "Голосовое управление презентациями", 12, muted,
             anchor="w").pack(anchor="w", pady=(3, 0))
 
         # Rounded-looking light-blue state banner.
         state = tk.Frame(body, bg=pale, highlightthickness=1,
-                         highlightbackground="#d3e4f9", padx=20, pady=14)
-        state.pack(fill="x", padx=29, pady=(0, 12))
+                         highlightbackground="#d3e4f9", padx=14, pady=9)
+        state.pack(fill="x", padx=17, pady=(0, 9))
         tk.Label(state, text="●", bg=pale, fg="#21b938",
-                 font=("Segoe UI", 24, "bold")).pack(side="left", padx=(0, 15))
+                 font=("Segoe UI", 19, "bold")).pack(side="left", padx=(0, 9))
         state_labels = tk.Frame(state, bg=pale)
         state_labels.pack(side="left", fill="x", expand=True)
         self.state_head = tk.Label(state_labels, text="Готов к работе", bg=pale,
-                    fg=ink, font=("Segoe UI", 19, "bold"))
+                    fg=ink, font=("Segoe UI", 15, "bold"))
         self.state_head.pack(anchor="w")
         self.state_sub = tk.Label(state_labels,
                     text="Нажмите «Запустить» для начала прослушивания",
-                    bg=pale, fg=muted, font=("Segoe UI", 11))
+                    bg=pale, fg=muted, font=("Segoe UI", 9))
         self.state_sub.pack(anchor="w", pady=(3, 0))
         self.button = tk.Button(state, text="▶  Запустить", command=self.toggle,
-                         font=("Segoe UI", 13, "bold"), bg="#0b4cc7",
+                         font=("Segoe UI", 11, "bold"), bg="#0b4cc7",
                          fg="white", activebackground="#0b63ef",
                          activeforeground="white", bd=0, relief="flat",
-                         padx=24, pady=13, cursor="hand2")
-        self.button.pack(side="right", padx=(15, 0))
+                         padx=15, pady=8, cursor="hand2")
+        self.button.pack(side="right", padx=(8, 0))
 
         # Audio device row and a real settings button.
         device_row = tk.Frame(body, bg=paper)
-        device_row.pack(fill="x", padx=29, pady=(0, 12))
-        lbl(device_row, "🎙  Микрофон:", 13, ink, "bold").pack(
-             side="left", padx=(2, 13), pady=10)
+        device_row.pack(fill="x", padx=17, pady=(0, 9))
+        lbl(device_row, "🎙  Микрофон:", 11, ink, "bold").pack(
+             side="left", padx=(2, 7), pady=5)
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure("Voice.TCombobox", padding=10,
+        style.configure("Voice.TCombobox", padding=6,
                         fieldbackground="#ffffff", foreground=ink,
                         bordercolor="#cbd8e9", lightcolor="#cbd8e9",
                         darkcolor="#cbd8e9", arrowcolor=ink)
         self.combo = ttk.Combobox(device_row, textvariable=self.mic_choice,
                            state="readonly", style="Voice.TCombobox",
-                           font=("Segoe UI", 12))
-        self.combo.pack(side="left", fill="x", expand=True, pady=8)
+                           font=("Segoe UI", 10))
+        self.combo.pack(side="left", fill="x", expand=True, pady=5)
         def show_settings():
             messagebox.showinfo("Слайд вперед — настройки",
                 "Голосовые команды:\n\n"
@@ -184,17 +184,17 @@ class SlaidVpered(tk.Tk):
                 "«Предыдущий слайд» — переход назад.\n\n"
                 "Для анимаций нужен настольный Microsoft PowerPoint.")
         tk.Button(device_row, text="⚙  Настройки", command=show_settings,
-                  font=("Segoe UI", 11, "bold"), bg="#f4f8ff", fg=ink,
+                  font=("Segoe UI", 10, "bold"), bg="#f4f8ff", fg=ink,
                   relief="solid", bd=1, highlightthickness=0,
-                  padx=15, pady=9, cursor="hand2").pack(
-                      side="right", padx=(12, 0), pady=8)
+                  padx=8, pady=6, cursor="hand2").pack(
+                      side="right", padx=(7, 0), pady=5)
 
         # Four command cards, aligned as in the reference screenshot.
         section = tk.Frame(body, bg=pale_deep, highlightthickness=1,
-                           highlightbackground="#d5e5f9", padx=13, pady=12)
-        section.pack(fill="x", padx=29, pady=(0, 10))
-        lbl(section, "Голосовые команды", 17, "#0744b7", "bold").pack(
-            anchor="w", padx=6, pady=(0, 9))
+                           highlightbackground="#d5e5f9", padx=10, pady=8)
+        section.pack(fill="x", padx=17, pady=(0, 8))
+        lbl(section, "Голосовые команды", 15, "#0744b7", "bold").pack(
+            anchor="w", padx=6, pady=(0, 6))
         commands = [
             ("▶", "«Дальше»", "Показать следующую строку\nили анимацию на текущем слайде"),
             ("◀", "«Назад»", "Вернуться к предыдущему шагу\nанимации на текущем слайде"),
@@ -204,31 +204,31 @@ class SlaidVpered(tk.Tk):
         for glyph, voice, detail in commands:
             cell = tk.Frame(section, bg="#fbfdff", highlightthickness=1,
                             highlightbackground="#d9e6f5")
-            cell.pack(fill="x", pady=4)
+            cell.pack(fill="x", pady=3)
             cell.grid_columnconfigure(1, weight=2, uniform="text")
             cell.grid_columnconfigure(2, weight=2, uniform="text")
             tk.Label(cell, text=glyph, fg="#0a61ef", bg="#fbfdff",
-                     font=("Segoe UI Symbol", 24, "bold"), width=3).grid(
-                         row=0, column=0, padx=(12, 10), pady=11, sticky="w")
-            lbl(cell, voice, 13, ink, "bold", anchor="w").grid(
-                row=0, column=1, sticky="w", padx=(0, 7), pady=10)
-            lbl(cell, detail, 11, "#40536f", "normal", anchor="w",
+                     font=("Segoe UI Symbol", 19, "bold"), width=2).grid(
+                         row=0, column=0, padx=(8, 5), pady=7, sticky="w")
+            lbl(cell, voice, 11, ink, "bold", anchor="w").grid(
+                row=0, column=1, sticky="w", padx=(0, 6), pady=7)
+            lbl(cell, detail, 9, "#40536f", "normal", anchor="w",
                 justify="left").grid(row=0, column=2, sticky="w",
-                                     padx=(2, 8), pady=10)
+                                     padx=(2, 7), pady=7)
 
         # Blue help strip with live feedback.
         tip = tk.Frame(body, bg="#deedff", highlightthickness=1,
-                       highlightbackground="#d0e4fc", padx=18, pady=13)
-        tip.pack(fill="x", padx=29, pady=(0, 18))
+                       highlightbackground="#d0e4fc", padx=12, pady=8)
+        tip.pack(fill="x", padx=17, pady=(0, 10))
         tk.Label(tip, text="●", bg="#deedff", fg="#0865e5",
-                 font=("Segoe UI", 22, "bold")).pack(side="left", padx=(0, 13))
+                 font=("Segoe UI", 17, "bold")).pack(side="left", padx=(0, 8))
         tip_body = tk.Frame(tip, bg="#deedff")
         tip_body.pack(side="left", fill="x", expand=True)
         lbl(tip_body, "Команды «Дальше» и «Назад» управляют анимациями и не "
-            "переключают слайд, если анимаций нет.", 11, "#063d9b",
-            "normal", wraplength=800, justify="left").pack(anchor="w")
+            "переключают слайд, если анимаций нет.", 10, "#063d9b",
+            "normal", wraplength=600, justify="left").pack(anchor="w")
         tk.Label(tip_body, textvariable=self.recent, bg="#deedff",
-                 fg="#3e597a", font=("Segoe UI", 10)).pack(
+                 fg="#3e597a", font=("Segoe UI", 9)).pack(
                      anchor="w", pady=(5, 0))
 
     def find_microphones(self):
