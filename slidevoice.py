@@ -9,6 +9,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import ttk, messagebox
 from voice_engine import GRAMMAR, decode_result
+from ppt_controls import execute_powerpoint_command
 
 NAME = "vosk-model-small-ru-0.22"
 DARK = "#0d1527"
@@ -31,7 +32,8 @@ def locate_model():
     return None
 
 def switch_slide(command):
-    key = 0x27 if command == "next" else 0x25
+    key = {"animation_next": 0x27, "animation_previous": 0x25,
+           "slide_next": 0x22, "slide_previous": 0x21}[command]
     api = ctypes.windll.user32
     api.keybd_event(key, 0, 0, 0)
     api.keybd_event(key, 0, 2, 0)
@@ -46,8 +48,8 @@ class SlideVoice(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("SlideVoice — голосовые слайды")
-        self.geometry("570x565")
-        self.minsize(510, 545)
+        self.geometry("630x755")
+        self.minsize(570, 710)
         self.configure(bg=DARK)
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.events = queue.Queue()
@@ -78,14 +80,18 @@ class SlideVoice(tk.Tk):
         row.grid_columnconfigure(0, weight=1, uniform="tile")
         row.grid_columnconfigure(1, weight=1, uniform="tile")
         for i, (arrow, caption, explanation, accent) in enumerate([
-            ("→", "ДАЛЬШЕ", "Следующий слайд", CYAN),
-            ("←", "НАЗАД", "Предыдущий слайд", GREEN),
+            ("→", "ДАЛЬШЕ", "Показать анимацию", CYAN),
+            ("←", "НАЗАД", "Убрать анимацию", GREEN),
+            ("⏭", "СЛЕДУЮЩИЙ СЛАЙД", "Минуя анимации", CYAN),
+            ("⏮", "ПРЕДЫДУЩИЙ СЛАЙД", "Минуя анимации", GREEN),
         ]):
-            tile = tk.Frame(row, bg=CARD, padx=19, pady=17)
-            tile.grid(row=0, column=i, sticky="nsew", padx=(0, 7) if i == 0 else (7, 0))
-            self.label(tile, arrow, 35, accent, True).pack(anchor="w")
-            self.label(tile, caption, 17, WHITE, True).pack(anchor="w")
-            self.label(tile, explanation, 9, MUTED).pack(anchor="w", pady=(7, 0))
+            tile = tk.Frame(row, bg=CARD, padx=16, pady=11)
+            tile.grid(row=i // 2, column=i % 2, sticky="nsew",
+                      padx=(0, 7) if i % 2 == 0 else (7, 0),
+                      pady=(0, 10) if i < 2 else (0, 0))
+            self.label(tile, arrow, 26, accent, True).pack(anchor="w")
+            self.label(tile, caption, 12 if i > 1 else 16, WHITE, True).pack(anchor="w")
+            self.label(tile, explanation, 9, MUTED).pack(anchor="w", pady=(6, 0))
         box = tk.Frame(self, bg=CARD)
         box.pack(fill="x", padx=26, pady=(0, 12))
         inside = tk.Frame(box, bg=CARD)
@@ -118,8 +124,8 @@ class SlideVoice(tk.Tk):
         self.button.pack(fill="x", padx=26, pady=(3, 10))
         self.label(self, "Для показа оставьте презентацию активным окном.",
                    9, MUTED).pack()
-        self.label(self, "PowerPoint · PDF · LibreOffice · браузер",
-                   9, MUTED).pack(pady=(3, 0))
+        self.label(self, "Разработчик: Рамазанов Роман Валерьевич",
+                   10, MUTED).pack(pady=(7, 0))
 
     def find_microphones(self):
         self.mics = [("По умолчанию (Windows)", None)]
@@ -198,14 +204,23 @@ class SlideVoice(tk.Tk):
             while True:
                 name, value = self.events.get_nowait()
                 if name == "ready":
-                    self.status.set("Слушаю: «Дальше» и «Назад»")
+                    self.status.set("Слушаю четыре голосовые команды")
                 elif name == "action":
-                    word = "Дальше →" if value == "next" else "← Назад"
+                    names = {
+                        "animation_next": "Дальше",
+                        "animation_previous": "Назад",
+                        "slide_next": "Следующий слайд",
+                        "slide_previous": "Предыдущий слайд",
+                    }
+                    word = names[value]
                     if focused_on_slidevoice():
                         self.recent.set(word + " — откройте презентацию")
                     else:
-                        switch_slide(value)
-                        self.recent.set(word + " — выполнено")
+                        outcome = execute_powerpoint_command(value, switch_slide)
+                        if outcome is None:
+                            switch_slide(value)
+                            outcome = "клавиша отправлена"
+                        self.recent.set(word + " — " + outcome)
                 elif name == "error":
                     self.status.set("Ошибка распознавания")
                     messagebox.showerror("Ошибка SlideVoice", str(value))

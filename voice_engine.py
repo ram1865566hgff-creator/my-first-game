@@ -1,10 +1,17 @@
-"""Recognize only two commands; disregard all other speech."""
+"""Russian offline speech grammar for four commands."""
 import json
 
-GRAMMAR = json.dumps(["дальше", "назад", "[unk]"], ensure_ascii=False)
-COMMANDS = {"дальше": "next", "назад": "previous"}
+COMMANDS = {
+    "дальше": "animation_next",
+    "назад": "animation_previous",
+    "следующий слайд": "slide_next",
+    "предыдущий слайд": "slide_previous",
+}
+GRAMMAR = json.dumps([*COMMANDS, "[unk]"], ensure_ascii=False)
 
 def parse_command(text):
+    if not isinstance(text, str):
+        return None
     return COMMANDS.get(" ".join(text.casefold().strip().split()))
 
 def decode_result(raw):
