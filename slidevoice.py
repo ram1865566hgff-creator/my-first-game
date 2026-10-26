@@ -9,7 +9,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import ttk, messagebox
 from voice_engine import GRAMMAR, decode_result
-from ppt_controls import execute_powerpoint_command
+from ppt_controls import execute_powerpoint_command, route_command
 
 NAME = "vosk-model-small-ru-0.22"
 DARK = "#0d1527"
@@ -32,8 +32,8 @@ def locate_model():
     return None
 
 def switch_slide(command):
-    key = {"animation_next": 0x27, "animation_previous": 0x25,
-           "slide_next": 0x22, "slide_previous": 0x21}[command]
+    # Only explicit slide commands can inject a key. Animation never does.
+    key = {"slide_next": 0x22, "slide_previous": 0x21}[command]
     api = ctypes.windll.user32
     api.keybd_event(key, 0, 0, 0)
     api.keybd_event(key, 0, 2, 0)
@@ -216,10 +216,9 @@ class SlideVoice(tk.Tk):
                     if focused_on_slidevoice():
                         self.recent.set(word + " — откройте презентацию")
                     else:
-                        outcome = execute_powerpoint_command(value, switch_slide)
-                        if outcome is None:
-                            switch_slide(value)
-                            outcome = "клавиша отправлена"
+                        # Safe routing: never send Right/Left for animations.
+                        outcome = route_command(
+                            value, execute_powerpoint_command, switch_slide)
                         self.recent.set(word + " — " + outcome)
                 elif name == "error":
                     self.status.set("Ошибка распознавания")

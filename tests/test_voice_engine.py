@@ -1,7 +1,7 @@
 import json
 import unittest
 from voice_engine import COMMANDS, GRAMMAR, parse_command, decode_result
-from ppt_controls import decide_action
+from ppt_controls import decide_action, apply_to_view, route_command
 
 class SpeechTests(unittest.TestCase):
     def test_all_commands(self):
@@ -15,27 +15,61 @@ class SpeechTests(unittest.TestCase):
             self.assertIsNone(parse_command(words))
         self.assertIsNone(decode_result("{broken"))
 
+class FakeSlide:
+    SlideIndex = 3
+
+class FakeView:
+    Slide = FakeSlide()
+    def __init__(self, clicks=0, current=0):
+        self.clicks = clicks
+        self.current = current
+        self.operations = []
+    def GetClickCount(self):
+        return self.clicks
+    def GetClickIndex(self):
+        return self.current
+    def GotoClick(self, index):
+        self.operations.append(("click", index))
+    def GotoSlide(self, index, reset):
+        self.operations.append(("slide", index, reset))
+
 class PowerPointTests(unittest.TestCase):
-    def test_animation_boundaries(self):
-        self.assertEqual(decide_action("animation_next", 0, 3, 2, 5),
-                         ("key", "animation_next"))
-        self.assertEqual(decide_action("animation_next", 3, 3, 2, 5),
+    def test_no_animation_never_changes_slide(self):
+        view = FakeView(0, 0)
+        self.assertIn("нет пошаговых", apply_to_view("animation_next", view, 5))
+        self.assertIn("нет пошаговых", apply_to_view("animation_previous", view, 5))
+        self.assertEqual(view.operations, [])
+    def test_animation_end_and_start_are_safe(self):
+        view = FakeView(3, 3)
+        self.assertEqual(decide_action("animation_next", 3, 3, 3, 5),
                          ("info", "все анимации показаны"))
-        self.assertEqual(decide_action("animation_next", -2, 3, 2, 5),
-                         ("info", "все анимации показаны"))
-        self.assertEqual(decide_action("animation_previous", 0, 3, 2, 5),
-                         ("info", "начало анимации"))
-        self.assertEqual(decide_action("animation_previous", 1, 3, 2, 5),
-                         ("key", "animation_previous"))
-        self.assertEqual(decide_action("animation_next", 0, 0, 2, 5),
-                         ("info", "все анимации показаны"))
-    def test_slide_navigation_ignores_click_position(self):
-        self.assertEqual(decide_action("slide_next", 0, 5, 2, 6), ("goto", 3))
-        self.assertEqual(decide_action("slide_previous", 5, 5, 2, 6), ("goto", 1))
-        self.assertEqual(decide_action("slide_next", 0, 0, 6, 6),
-                         ("info", "последний слайд"))
-        self.assertEqual(decide_action("slide_previous", 0, 0, 1, 6),
-                         ("info", "первый слайд"))
+        apply_to_view("animation_next", view, 5)
+        self.assertEqual(view.operations, [])
+        view.current = 0
+        apply_to_view("animation_previous", view, 5)
+        self.assertEqual(view.operations, [])
+    def test_animation_commands_only_go_to_click(self):
+        view = FakeView(3, 1)
+        apply_to_view("animation_next", view, 6)
+        self.assertEqual(view.operations, [("click", 2)])
+        apply_to_view("animation_previous", view, 6)
+        self.assertEqual(view.operations, [("click", 2), ("click", 0)])
+    def test_slide_commands_only_go_to_slide(self):
+        view = FakeView(3, 2)
+        apply_to_view("slide_next", view, 6)
+        apply_to_view("slide_previous", view, 6)
+        self.assertEqual(view.operations, [("slide", 4, -1), ("slide", 2, -1)])
+    def test_com_missing_cannot_send_animation_key(self):
+        sent = []
+        no_com = lambda action: None
+        route_command("animation_next", no_com, sent.append)
+        route_command("animation_previous", no_com, sent.append)
+        self.assertEqual(sent, [])
+        route_command("slide_next", no_com, sent.append)
+        self.assertEqual(sent, ["slide_next"])
+    def test_unknown_or_automatic_state_rejected(self):
+        self.assertEqual(decide_action("animation_next", -2, 3, 3, 6)[0], "info")
+        self.assertEqual(decide_action("animation_next", 7, 3, 3, 6)[0], "info")
 
 if __name__ == "__main__":
     unittest.main()
