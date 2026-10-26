@@ -1,4 +1,4 @@
-"""SlideVoice — offline Russian voice control for presentations."""
+"""Слайд вперед — offline Russian voice control for presentations."""
 import ctypes
 import os
 import queue
@@ -24,7 +24,7 @@ def locate_model():
              Path(__file__).resolve().parent]
     local = os.environ.get("LOCALAPPDATA")
     if local:
-        roots.append(Path(local) / "SlideVoice")
+        roots.append(Path(local) / "Слайд вперед")
     for root in roots:
         path = root / "models" / NAME
         if (path / "am").is_dir() and (path / "conf").is_dir():
@@ -44,13 +44,19 @@ def focused_on_slidevoice():
     ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     return pid.value == os.getpid()
 
-class SlideVoice(tk.Tk):
+class SlaidVpered(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("SlideVoice — голосовые слайды")
+        self.title("Слайд вперед — голосовые слайды")
         self.geometry("630x755")
         self.minsize(570, 710)
         self.configure(bg=DARK)
+        app_icon = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "assets" / "slide-vpered.ico"
+        if app_icon.is_file():
+            try:
+                self.iconbitmap(str(app_icon))
+            except tk.TclError:
+                pass
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.events = queue.Queue()
         self.stop = threading.Event()
@@ -72,7 +78,9 @@ class SlideVoice(tk.Tk):
     def draw(self):
         heading = tk.Frame(self, bg=DARK)
         heading.pack(fill="x", padx=26, pady=(25, 14))
-        self.label(heading, "SlideVoice", 28, WHITE, True).pack(anchor="w")
+        self.label(heading, "Разработчик: Рамазанов Роман Валерьевич",
+                   12, CYAN, True).pack(anchor="w", pady=(0, 8))
+        self.label(heading, "Слайд вперед", 30, WHITE, True).pack(anchor="w")
         self.label(heading, "Переключение слайдов голосом · без интернета",
                    10, MUTED).pack(anchor="w", pady=(4, 0))
         row = tk.Frame(self, bg=DARK)
@@ -124,8 +132,7 @@ class SlideVoice(tk.Tk):
         self.button.pack(fill="x", padx=26, pady=(3, 10))
         self.label(self, "Для показа оставьте презентацию активным окном.",
                    9, MUTED).pack()
-        self.label(self, "Разработчик: Рамазанов Роман Валерьевич",
-                   10, MUTED).pack(pady=(7, 0))
+
 
     def find_microphones(self):
         self.mics = [("По умолчанию (Windows)", None)]
@@ -148,7 +155,7 @@ class SlideVoice(tk.Tk):
             return
         path = locate_model()
         if not path:
-            messagebox.showerror("SlideVoice", "Не найдена русская речевая модель.\n"
+            messagebox.showerror("Слайд вперед", "Не найдена русская речевая модель.\n"
                 "В готовом EXE она встроена. Для запуска из исходников "
                 "откройте УСТАНОВИТЬ_И_ЗАПУСТИТЬ.bat.")
             return
@@ -222,7 +229,7 @@ class SlideVoice(tk.Tk):
                         self.recent.set(word + " — " + outcome)
                 elif name == "error":
                     self.status.set("Ошибка распознавания")
-                    messagebox.showerror("Ошибка SlideVoice", str(value))
+                    messagebox.showerror("Ошибка Слайд вперед", str(value))
                 elif name == "stopped":
                     self.listening = False
                     self.combo.config(state="readonly")
@@ -241,4 +248,4 @@ class SlideVoice(tk.Tk):
 if __name__ == "__main__":
     if sys.platform != "win32":
         raise SystemExit("Поддерживается Windows 10/11")
-    SlideVoice().mainloop()
+    SlaidVpered().mainloop()

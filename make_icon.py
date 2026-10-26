@@ -1,18 +1,22 @@
-"""Generate app icon at build time with Pillow."""
+"""Build the new Слайд вперед Windows icon from bundled original artwork."""
 from pathlib import Path
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
-target = Path(__file__).resolve().parent / "assets"
-target.mkdir(exist_ok=True)
-pic = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
-d = ImageDraw.Draw(pic)
-d.rounded_rectangle((8, 8, 248, 248), radius=62, fill="#10203b")
-d.rounded_rectangle((21, 21, 235, 235), radius=51, outline="#42d9ff", width=6)
-d.rounded_rectangle((76, 46, 182, 208), radius=15, fill="#e6f7ff")
-d.polygon([(152, 46), (182, 76), (152, 76)], fill="#84b7db")
-for y in (102, 134, 166):
-    d.rounded_rectangle((93, y, 163, y + 8), radius=4, fill="#658cb7")
-d.ellipse((162, 154, 238, 230), fill="#4ce1b2")
-d.polygon([(188, 172), (188, 212), (217, 192)], fill="#10203b")
-pic.save(target / "slidevoice.ico", format="ICO",
-         sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+ASSETS = Path(__file__).resolve().parent / "assets"
+ASSETS.mkdir(exist_ok=True)
+art_path = ASSETS / "slide-vpered-art.jpg"
+if not art_path.is_file():
+    raise FileNotFoundError("The source app artwork is missing: " + str(art_path))
+
+art = Image.open(art_path).convert("RGBA")
+# Export crisp, transparent-edge Windows icon versions.
+image = art.resize((512, 512), Image.Resampling.LANCZOS)
+image = image.filter(ImageFilter.UnsharpMask(radius=1.5, percent=105, threshold=2))
+mask = Image.new("L", (512, 512), 0)
+draw = ImageDraw.Draw(mask)
+draw.rounded_rectangle((2, 2, 510, 510), radius=91, fill=255)
+image.putalpha(mask)
+image.save(ASSETS / "slide-vpered.ico", format="ICO",
+    sizes=[(16, 16), (24, 24), (32, 32), (48, 48),
+           (64, 64), (128, 128), (256, 256)])
+image.resize((256, 256), Image.Resampling.LANCZOS).save(ASSETS / "slide-vpered.png")

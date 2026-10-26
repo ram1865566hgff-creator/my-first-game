@@ -1,4 +1,4 @@
-name: Build SlideVoice Windows EXE
+name: Build Слайд вперед Windows EXE
 on:
   push:
     branches: [slidevoice-windows]
@@ -30,11 +30,11 @@ jobs:
       - name: Build executable
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SlideVoice --icon assets/slidevoice.ico --add-data "models;models" --collect-all vosk --collect-all sounddevice --collect-submodules win32com --hidden-import pythoncom --hidden-import pywintypes --hidden-import cffi --hidden-import _cffi_backend slidevoice.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "Слайд вперед" --icon assets/slide-vpered.ico --add-data "models;models" --add-data "assets;assets" --collect-all vosk --collect-all sounddevice --collect-submodules win32com --hidden-import pythoncom --hidden-import pywintypes --hidden-import cffi --hidden-import _cffi_backend slidevoice.py
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
-          name: SlideVoice-Windows-exe
-          path: dist/SlideVoice.exe
+          name: Slaid-Vpered-Windows-exe
+          path: "dist/Слайд вперед.exe"
           if-no-files-found: error
           retention-days: 30
