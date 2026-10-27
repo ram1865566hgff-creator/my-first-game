@@ -73,3 +73,34 @@ class PowerPointTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from navigation_guard import SlideCommandGuard
+
+class RepeatedVoiceTests(unittest.TestCase):
+    def test_single_phrase_cannot_skip_two_slides(self):
+        guard = SlideCommandGuard(window_seconds=2.7)
+        self.assertTrue(guard.accept("slide_next", 10.0))
+        # Two recognizer results for one spoken "следующий слайд".
+        self.assertFalse(guard.accept("slide_next", 11.3))
+        self.assertFalse(guard.accept("slide_next", 12.4))
+        self.assertTrue(guard.accept("slide_next", 12.8))
+
+    def test_backwards_independent(self):
+        guard = SlideCommandGuard()
+        self.assertTrue(guard.accept("slide_next", 1.0))
+        self.assertTrue(guard.accept("slide_previous", 1.2))
+        self.assertFalse(guard.accept("slide_previous", 2.2))
+        self.assertTrue(guard.accept("slide_next", 2.3))
+
+    def test_animations_not_blocked(self):
+        guard = SlideCommandGuard()
+        self.assertTrue(guard.accept("animation_next", 1.0))
+        self.assertTrue(guard.accept("animation_next", 1.1))
+        self.assertTrue(guard.accept("animation_previous", 1.15))
+
+    def test_reset_on_new_session(self):
+        guard=SlideCommandGuard()
+        self.assertTrue(guard.accept("slide_next", 5.0))
+        guard.reset()
+        self.assertTrue(guard.accept("slide_next", 5.1))

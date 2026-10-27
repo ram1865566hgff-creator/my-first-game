@@ -10,6 +10,7 @@ from pathlib import Path
 from tkinter import ttk, messagebox
 from voice_engine import GRAMMAR, decode_result
 from ppt_controls import execute_powerpoint_command, route_command
+from navigation_guard import SlideCommandGuard
 
 NAME = "vosk-model-small-ru-0.22"
 DARK = "#0d1527"
@@ -63,6 +64,9 @@ class SlaidVpered(tk.Tk):
         self.thread = None
         self.listening = False
         self.last_trigger = 0.0
+        # A single spoken phrase may generate multiple final recognition results.
+        # Keep a separate idempotency guard for slide transitions.
+        self.slide_guard = SlideCommandGuard(window_seconds=2.7)
         self.mics = []
         self.mic_choice = tk.StringVar()
         self.status = tk.StringVar(value="Ожидание запуска")
@@ -260,6 +264,7 @@ class SlaidVpered(tk.Tk):
             return
         mic = next((n for name, n in self.mics if name == self.mic_choice.get()), None)
         self.stop.clear()
+        self.slide_guard.reset()
         self.listening = True
         self.combo.config(state="disabled")
         self.button.config(text="■  Остановить", bg="#0b4cc7")
@@ -323,6 +328,11 @@ class SlaidVpered(tk.Tk):
                         "slide_previous": "Предыдущий слайд",
                     }
                     word = names[value]
+                    # Ignore a second recognized "Следующий/Предыдущий слайд"
+                    # from the same utterance, even if separated by >1 second.
+                    if not self.slide_guard.accept(value, time.monotonic()):
+                        self.recent.set(word + " — повтор распознавания пропущен")
+                        continue
                     if focused_on_slidevoice():
                         self.recent.set(word + " — откройте презентацию")
                     else:
