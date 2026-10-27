@@ -1,0 +1,68 @@
+name: PDF Manager v2 Offline Windows Installer
+on:
+  push:
+    branches: [my-pdf-studio-offline-build]
+  workflow_dispatch:
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Extract PDF Manager project
+        shell: pwsh
+        run: |
+          @'
+          import base64, io, tarfile, zlib
+          from pathlib import Path
+          payload = base64.b85decode(Path('pdf-manager-payload.b85').read_text().strip())
+          data = zlib.decompress(payload)
+          with tarfile.open(fileobj=io.BytesIO(data)) as archive:
+              archive.extractall('.')
+          '@ | Set-Content -Encoding UTF8 extract_payload.py
+          python extract_payload.py
+          if ($LASTEXITCODE -ne 0) { throw "Could not extract project" }
+          python generate_icon.py
+          if ($LASTEXITCODE -ne 0) { throw "Icon generation failed" }
+      - name: Install build-time Python packages
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-windows.txt pyinstaller pytest
+          if ($LASTEXITCODE -ne 0) { throw "Package installation failed" }
+      - name: Run regression tests
+        shell: pwsh
+        run: |
+          python -m pytest -q tests/test_engine.py tests/test_regressions.py
+          if ($LASTEXITCODE -ne 0) { throw "Tests failed" }
+      - name: Build bundled PDF Manager program
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name PDFManager --icon assets/PDFManager.ico --add-data "assets/PDFManager.ico;assets" --collect-all pymupdf pdf_manager.pyw
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
+      - name: Install Inno Setup on build server
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+      - name: Pack standalone offline setup
+        shell: pwsh
+        run: |
+          $candidates = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "${env:ProgramFiles}\Inno Setup 6\ISCC.exe")
+          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC missing" }
+          & $iscc "installer/PDFManager.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed" }
+          if (!(Test-Path "release/PDFManager_Offline_Setup.exe")) { throw "Setup EXE missing" }
+      - name: Upload finished EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDFManager_v2_Offline_Setup
+          path: release/PDFManager_Offline_Setup.exe
+          if-no-files-found: error
+          retention-days: 30
