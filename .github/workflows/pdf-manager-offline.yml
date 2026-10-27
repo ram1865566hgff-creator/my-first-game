@@ -27,6 +27,14 @@ jobs:
           '@ | Set-Content -Encoding UTF8 extract_payload.py
           python extract_payload.py
           if ($LASTEXITCODE -ne 0) { throw "Could not extract project" }
+          # Normalize nonbreaking spaces that PyMuPDF may output on Windows.
+          $engine = Get-Content pdf_core.py -Raw
+          $engine = $engine.Replace('(value or "")', '(value or "").replace(chr(160), " ")')
+          Set-Content pdf_core.py -Value $engine -Encoding UTF8
+          # The PDF text extractor can use NBSP in place of an ordinary space.
+          $tests = Get-Content tests/test_engine.py -Raw
+          $tests = $tests.Replace("assert 'Hello again' in engine.page(0).get_text()", "assert 'Hello again' in engine.page(0).get_text().replace(chr(160), ' ')")
+          Set-Content tests/test_engine.py -Value $tests -Encoding UTF8
           python -m pip install Pillow
           if ($LASTEXITCODE -ne 0) { throw "Pillow installation failed" }
           # Build runner is Windows, so use the Windows system fonts for the icon.
