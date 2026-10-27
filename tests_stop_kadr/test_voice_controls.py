@@ -42,3 +42,47 @@ class SpeedTests(unittest.TestCase):
         self.assertIsNone(d.accept_final('{"text":"бессмысленно"}'))
     def test_revised_videomode(self):
         self.assertEqual(dict(MODES)["ВК Видео — пробел"],0x20)
+
+
+from video_controls_stop_kadr import choose_key
+class TabSwitchTests(unittest.TestCase):
+    def test_same_browser_different_tab(self):
+        guard=PlaybackGuard()
+        events=[]
+        mode="Авто — текущая вкладка и видеоплеер"
+        apply_command("pause",mode,101,False,guard,events.append,
+                      title="Видео один — VK Видео")
+        apply_command("pause",mode,101,False,guard,events.append,
+                      title="Название ролика - YouTube")
+        self.assertEqual(events,[0x20,0x4B])
+        # Returning to the first tab retains its last requested state.
+        apply_command("pause",mode,101,False,guard,events.append,
+                      title="Видео один — VK Видео")
+        self.assertEqual(len(events),2)
+        apply_command("play",mode,101,False,guard,events.append,
+                      title="Видео один — VK Видео")
+        self.assertEqual(events,[0x20,0x4B,0x20])
+
+    def test_new_windows_same_title(self):
+        guard=PlaybackGuard()
+        events=[]
+        mode=MODES[0][0]
+        apply_command("pause",mode,101,False,guard,events.append,title="Видео")
+        apply_command("pause",mode,202,False,guard,events.append,title="Видео")
+        self.assertEqual(events,[0x20,0x20])
+
+    def test_auto_mode_routing(self):
+        mode=MODES[-1][0]
+        self.assertEqual(choose_key(mode,"Смешные коты - YouTube - Chrome"),0x4B)
+        self.assertEqual(choose_key(mode,"ВК Видео — Яндекс Браузер"),0x20)
+        self.assertEqual(choose_key(mode,"Видео — VLC"),0x20)
+        self.assertEqual(choose_key(MODES[2][0],"Some YouTube window"),0xB3)
+
+    def test_clear_without_restarting(self):
+        guard=PlaybackGuard()
+        events=[]
+        mode=MODES[-1][0]
+        apply_command("pause",mode,99,False,guard,events.append,title="VK")
+        guard.clear()
+        apply_command("pause",mode,99,False,guard,events.append,title="VK")
+        self.assertEqual(events,[0x20,0x20])

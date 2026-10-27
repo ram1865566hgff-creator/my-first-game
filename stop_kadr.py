@@ -5,7 +5,7 @@ from tkinter import ttk, messagebox
 from voice_engine_stop_kadr import GRAMMAR, decode_result
 from video_controls_stop_kadr import MODES, PlaybackGuard, apply_command
 from fast_voice_stop_kadr import FastVoiceDetector
-from windows_video_stop_kadr import send_input_key, list_windows, activate_target
+from windows_video_stop_kadr import send_input_key, get_foreground_context
 
 TITLE="Стоп кадр"
 MODEL="vosk-model-small-ru-0.22"
@@ -52,16 +52,13 @@ class App(tk.Tk):
         self.last_heard=0.
         self.guard=PlaybackGuard()
         self.mic_var=tk.StringVar()
-        self.mode_var=tk.StringVar(value=MODES[0][0])
-        self.target_var=tk.StringVar(value="Автоматически (активное окно)")
-        self.target_hwnds={}
+        self.mode_var=tk.StringVar(value="Авто — текущая вкладка и видеоплеер")
         self.status=tk.StringVar(value="Ожидание запуска")
         self.subtitle=tk.StringVar(value="Выберите микрофон и нажмите «Начать»")
         self.last=tk.StringVar(value="Команда пока не прозвучала")
         self.devices=[]
         self.layout()
         self.read_mics()
-        self.refresh_targets()
         self.after(30,self.poll)
 
     def layout(self):
@@ -127,17 +124,9 @@ class App(tk.Tk):
             style="Stop.TCombobox",font=("Segoe UI",10),
             values=[name for name,value in MODES])
         self.methods.pack(side="left",fill="x",expand=True)
-        # In some browsers a keyboard event is ignored unless the video window
-        # itself is active. Select its window to bring it to foreground first.
-        targetrow=tk.Frame(page,bg=WHITE)
-        targetrow.pack(fill="x",padx=19,pady=(0,9))
-        label(targetrow,"Окно видео",11,bold=True).pack(side="left",padx=(0,10))
-        self.targets=ttk.Combobox(targetrow,textvariable=self.target_var,
-             state="readonly",style="Stop.TCombobox",font=("Segoe UI",10))
-        self.targets.pack(side="left",fill="x",expand=True)
-        tk.Button(targetrow,text="↻ Обновить",command=self.refresh_targets,
+        tk.Button(moderow,text="↻ Сбросить",command=self.reset_guard,
              bg="#e4efff",fg=NAVY,font=("Segoe UI",10),
-             relief="flat",padx=9,pady=6).pack(side="right",padx=(7,0))
+             relief="flat",padx=8,pady=5).pack(side="right",padx=(8,0))
         pane=tk.Frame(page,bg="#e3efff",highlightthickness=1,
                       highlightbackground="#d1e2f8",padx=13,pady=12)
         pane.pack(fill="x",padx=19,pady=(0,12))
@@ -159,22 +148,18 @@ class App(tk.Tk):
         label(info,"ⓘ",21,BLUE,True).pack(side="left",padx=(0,12))
         tt=tk.Frame(info,bg="#e4efff")
         tt.pack(side="left",fill="x",expand=True)
-        label(tt,"Для VK Видео выберите режим «ВК Видео», затем окно браузера "
-              "в строке «Окно видео» и нажмите на самом видео один раз.",10,
+        label(tt,"Режим «Авто» следует за активной вкладкой. Для YouTube "
+              "используется K, для ВК Видео и обычных плееров — пробел. "
+              "Щёлкните по самому видео, затем говорите «Стоп» или «Плей».",10,
               "#194276",wraplength=530,justify="left").pack(anchor="w")
         tk.Label(tt,textvariable=self.last,bg="#e4efff",fg=MUTED,
                  font=("Segoe UI",10),wraplength=530,
                  justify="left").pack(anchor="w",pady=(5,0))
 
-    def refresh_targets(self):
-        selected=self.target_var.get()
-        self.target_hwnds={"Автоматически (активное окно)":None}
-        for hwnd,title in list_windows():
-            name=f"{title[:67]}  [{hwnd}]"
-            self.target_hwnds[name]=hwnd
-        self.targets["values"]=list(self.target_hwnds)
-        self.target_var.set(selected if selected in self.target_hwnds
-                            else "Автоматически (активное окно)")
+    def reset_guard(self):
+        """Allow fresh Play/Pause state without stopping speech recognition."""
+        self.guard.clear()
+        self.last.set("Учёт команд сброшен. Микрофон продолжает слушать.")
 
     def read_mics(self):
         self.devices=[("По умолчанию (Windows)",None)]
@@ -207,7 +192,7 @@ class App(tk.Tk):
         self.stop_event.clear()
         self.running=True
         self.mics.config(state="disabled")
-        self.methods.config(state="disabled")
+        # Mode can be changed while video is playing; no mic restart needed.
         self.button.config(text="■ Остановить")
         self.status.set("Подключаю микрофон...")
         self.subtitle.set("Загрузка русской модели")
@@ -258,18 +243,18 @@ class App(tk.Tk):
                     self.subtitle.set("Слушаю команды «Стоп» и «Плей»")
                 elif event=="command":
                     try:
-                        chosen=self.target_hwnds.get(self.target_var.get())
-                        if chosen is not None:
-                            ok,info=activate_target(chosen)
-                            if not ok:
-                                self.last.set("Окно видео: "+info)
-                                continue
-                            hwnd=chosen
-                        else:
-                            hwnd=foreground()
+                        # Re-read active window and its browser-tab title for
+                        # EVERY command, rather than keeping the first window.
+                        hwnd,title=get_foreground_context()
+                        if not hwnd:
+                            self.last.set("Нет активного окна с видео")
+                            continue
                         message=apply_command(value,self.mode_var.get(),hwnd,
-                           this_window(hwnd),self.guard,send_key)
-                        self.last.set(("Стоп" if value=="pause" else "Плей")+" — "+message)
+                           this_window(hwnd),self.guard,send_key,title=title)
+                        self.last.set(("Стоп" if value=="pause" else "Плей")+
+                                      " — "+message)
+                        if title:
+                            self.subtitle.set("Текущее окно: "+title[:62])
                     except Exception as ex:
                         self.last.set("Ошибка: "+str(ex))
                 elif event=="error":

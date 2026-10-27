@@ -76,3 +76,21 @@ def activate_target(hwnd):
     if int(u.GetForegroundWindow())!=int(hwnd):
         return False,"Windows не разрешила активировать окно: щёлкните по видео"
     return True,"готово"
+
+
+def get_foreground_context():
+    """Return the real HWND and current title; tab changes update this title."""
+    u=ctypes.windll.user32
+    u.GetForegroundWindow.restype=wintypes.HWND
+    u.GetWindowTextLengthW.argtypes=[wintypes.HWND]
+    u.GetWindowTextLengthW.restype=ctypes.c_int
+    u.GetWindowTextW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int]
+    u.GetWindowTextW.restype=ctypes.c_int
+    hwnd=u.GetForegroundWindow()
+    if not hwnd:
+        return 0,""
+    n=u.GetWindowTextLengthW(hwnd)
+    buf=ctypes.create_unicode_buffer(n+1)
+    if n:
+        u.GetWindowTextW(hwnd,buf,n+1)
+    return int(hwnd),buf.value
