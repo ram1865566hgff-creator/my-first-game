@@ -1,0 +1,74 @@
+name: Build My PDF Studio Offline Windows Installer
+on:
+  push:
+    branches:
+      - my-pdf-studio-offline-build
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows-offline:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Python 3.11 x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "PyMuPDF>=1.24,<2" "Pillow>=10,<13" "python-docx>=1.1,<2" "pywin32>=306" "pyinstaller>=6,<7"
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
+      - name: Compile source and smoke test
+        shell: pwsh
+        run: |
+          python -m py_compile pdf_studio.py
+          python -c "import fitz, PIL, docx, tkinter; a=fitz.open(); a.new_page().insert_text((45,45),'Hello PDF'); assert 'Hello' in a[0].get_text(); print('PDF+Word+Tk OK')"
+          if ($LASTEXITCODE -ne 0) { throw 'Smoke test failed' }
+      - name: Bundle complete Windows application
+        shell: pwsh
+        run: |
+          python -m PyInstaller --clean --noconfirm --onedir --windowed --name MyPDFStudio --collect-all pymupdf --hidden-import=win32print --hidden-import=win32ui --hidden-import=win32api pdf_studio.py
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
+          if (!(Test-Path dist\MyPDFStudio\MyPDFStudio.exe)) { throw 'Application EXE missing' }
+      - name: Find Inno Setup compiler
+        id: inno
+        shell: pwsh
+        run: |
+          $locations = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "${env:ProgramFiles}\Inno Setup 6\ISCC.exe")
+          $compiler = $locations | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $compiler) {
+            choco install innosetup --yes --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup install failed' }
+            $compiler = $locations | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $compiler) { throw 'Inno Setup not found' }
+          "path=$compiler" >> $env:GITHUB_OUTPUT
+      - name: Create single offline setup EXE
+        shell: pwsh
+        run: |
+          & "${{ steps.inno.outputs.path }}" mypdfstudio.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed' }
+          if (!(Test-Path release\MyPDFStudio_Offline_Setup.exe)) { throw 'Installer output missing' }
+          Get-Item release\MyPDFStudio_Offline_Setup.exe | Format-List Name,Length
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyPDFStudio_Offline_Setup
+          path: release/MyPDFStudio_Offline_Setup.exe
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish direct EXE download
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $short = '${{ github.sha }}'.Substring(0,12)
+          $tag = "mypdfstudio-offline-$short"
+          gh release create $tag release\MyPDFStudio_Offline_Setup.exe --title "My PDF Studio - автономный установщик Windows" --notes "Один EXE для Windows 10/11 x64. Установка без Интернета. Включены Python и библиотеки." --target "${{ github.sha }}"
