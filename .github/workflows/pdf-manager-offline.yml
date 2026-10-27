@@ -29,6 +29,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Could not extract project" }
           python -m pip install Pillow
           if ($LASTEXITCODE -ne 0) { throw "Pillow installation failed" }
+          # Build runner is Windows, so use the Windows system fonts for the icon.
+          $script = Get-Content generate_icon.py -Raw
+          $script = $script.Replace('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 'C:/Windows/Fonts/arialbd.ttf')
+          $script = $script.Replace('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 'C:/Windows/Fonts/arial.ttf')
+          Set-Content -Path generate_icon.py -Value $script -Encoding UTF8
           python generate_icon.py
           if ($LASTEXITCODE -ne 0) { throw "Icon generation failed" }
       - name: Install build-time Python packages
