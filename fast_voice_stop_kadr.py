@@ -1,4 +1,4 @@
-"""Trigger short voice commands on stable partial Vosk results before silence."""
+"""Fast 'плей' recognition. 'Стоп' must be independently verified in full speech."""
 import json
 from voice_engine_stop_kadr import parse_command, decode_result
 
@@ -14,6 +14,10 @@ class FastVoiceDetector:
             command=parse_command(json.loads(raw).get("partial",""))
         except (ValueError,TypeError,AttributeError):
             command=None
+        # Short partials frequently hallucinate "стоп" after hearing "с".
+        # Never emit pause based on partial or constrained final results.
+        if command!="play":
+            command=None
         if self.held:
             return None
         if command!=self.partial:
@@ -27,6 +31,8 @@ class FastVoiceDetector:
 
     def accept_final(self,raw):
         command=decode_result(raw)
+        if command!="play":
+            command=None
         already=self.held
         self.partial=None
         self.first_at=None

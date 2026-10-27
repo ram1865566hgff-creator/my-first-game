@@ -5,6 +5,7 @@ from tkinter import ttk, messagebox
 from voice_engine_stop_kadr import GRAMMAR, decode_result
 from video_controls_stop_kadr import MODES, PlaybackGuard, apply_command
 from fast_voice_stop_kadr import FastVoiceDetector
+from precise_stop_kadr import is_verified_stop
 from windows_video_stop_kadr import send_input_key, get_foreground_context
 
 TITLE="Стоп кадр"
@@ -208,7 +209,12 @@ class App(tk.Tk):
             SetLogLevel(-1)
             model=Model(folder)
             rate=int(sd.query_devices(device,"input")["default_samplerate"])
+            # The tiny command-only grammar can incorrectly hear the letter
+            # "с" or the start of another word as "стоп". Use unrestricted
+            # transcription to CONFIRM the whole spoken word before pausing.
             recognizer=KaldiRecognizer(model,rate,GRAMMAR)
+            natural=KaldiRecognizer(model,rate)
+            natural.SetWords(True)
             detector=FastVoiceDetector(min_stable_seconds=0.10)
             def audio_callback(data,frames,ts,status):
                 if not self.stop_event.is_set():
@@ -221,14 +227,22 @@ class App(tk.Tk):
                     try: data=q.get(timeout=.2)
                     except queue.Empty: continue
                     finished=recognizer.AcceptWaveform(data)
+                    full_utterance=natural.AcceptWaveform(data)
                     now=time.monotonic()
                     if finished:
                         command=detector.accept_final(recognizer.Result())
                     else:
                         command=detector.accept_partial(recognizer.PartialResult(),now)
-                    if command and now-self.last_heard>=0.20:
+                    # Play retains the quick command-grammar detection.
+                    # STOP NEVER fires from partial speech, since partial
+                    # "стоп" is a common false positive for a mere "с".
+                    if command=="play" and now-self.last_heard>=0.20:
                         self.last_heard=now
-                        self.queue.put(("command",command))
+                        self.queue.put(("command","play"))
+                    if full_utterance and is_verified_stop(natural.Result()):
+                        if now-self.last_heard>=0.20:
+                            self.last_heard=now
+                            self.queue.put(("command","pause"))
         except Exception as ex:
             self.queue.put(("error",str(ex)))
         finally:

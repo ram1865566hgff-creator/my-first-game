@@ -32,7 +32,7 @@ class SpeedTests(unittest.TestCase):
         d=FastVoiceDetector(.10)
         self.assertIsNone(d.accept_partial('{"partial":"стоп"}',1.00))
         self.assertIsNone(d.accept_partial('{"partial":"стоп"}',1.05))
-        self.assertEqual(d.accept_partial('{"partial":"стоп"}',1.12),"pause")
+        self.assertIsNone(d.accept_partial('{"partial":"стоп"}',1.12))
         self.assertIsNone(d.accept_final('{"text":"стоп"}'))
         self.assertIsNone(d.accept_partial('{"partial":"плей"}',2.00))
         self.assertEqual(d.accept_partial('{"partial":"плей"}',2.12),"play")
@@ -86,3 +86,34 @@ class TabSwitchTests(unittest.TestCase):
         guard.clear()
         apply_command("pause",mode,99,False,guard,events.append,title="VK")
         self.assertEqual(events,[0x20,0x20])
+
+
+from precise_stop_kadr import is_verified_stop
+
+class PreciseStopTests(unittest.TestCase):
+    def test_early_stop_hallucination_must_never_pause(self):
+        detector=FastVoiceDetector(0.10)
+        for t in (0.0, 0.11, 0.25, 0.39, 0.65):
+            self.assertIsNone(detector.accept_partial('{"partial":"стоп"}',t))
+        self.assertIsNone(detector.accept_final('{"text":"стоп"}'))
+
+    def test_true_stop_after_full_word(self):
+        transcript=json.dumps({"text":"стоп","result":[
+            {"word":"стоп","conf":0.88}]},ensure_ascii=False)
+        self.assertTrue(is_verified_stop(transcript))
+
+    def test_initial_s_other_words_ignored(self):
+        for text in ("с", "снова", "слово", "смотри", "сила", "стопка",
+                     "стоп сигнал", "сто", "что", "", "стоп потом"):
+            raw=json.dumps({"text":text},ensure_ascii=False)
+            self.assertFalse(is_verified_stop(raw),text)
+
+    def test_low_confidence_stop_is_ignored(self):
+        bad=json.dumps({"text":"стоп","result":[{"word":"стоп","conf":0.32}]},
+                       ensure_ascii=False)
+        self.assertFalse(is_verified_stop(bad))
+
+    def test_no_grammar_stop_even_when_final(self):
+        detector=FastVoiceDetector(0.10)
+        self.assertIsNone(detector.accept_final('{"text":"стоп"}'))
+        self.assertEqual(detector.accept_final('{"text":"плей"}'),"play")
