@@ -22,7 +22,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-stop-kadr.txt pyinstaller==6.16.0
       - name: Tests
-        run: python -m unittest discover -s tests_stop_kadr -v
+        run: python -m py_compile stop_kadr.py video_controls_stop_kadr.py fast_voice_stop_kadr.py windows_video_stop_kadr.py
+          python -m unittest discover -s tests_stop_kadr -v
       - name: Model
         run: python download_model_stop_kadr.py
       - name: Icon

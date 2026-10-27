@@ -24,3 +24,21 @@ class Commands(unittest.TestCase):
         apply_command("play",MODES[2][0],100,True,PlaybackGuard(),sent.append)
         self.assertEqual(sent,[0xB3])
 if __name__=="__main__":unittest.main()
+
+
+from fast_voice_stop_kadr import FastVoiceDetector
+class SpeedTests(unittest.TestCase):
+    def test_trigger_before_final(self):
+        d=FastVoiceDetector(.10)
+        self.assertIsNone(d.accept_partial('{"partial":"стоп"}',1.00))
+        self.assertIsNone(d.accept_partial('{"partial":"стоп"}',1.05))
+        self.assertEqual(d.accept_partial('{"partial":"стоп"}',1.12),"pause")
+        self.assertIsNone(d.accept_final('{"text":"стоп"}'))
+        self.assertIsNone(d.accept_partial('{"partial":"плей"}',2.00))
+        self.assertEqual(d.accept_partial('{"partial":"плей"}',2.12),"play")
+    def test_final_fallback(self):
+        d=FastVoiceDetector()
+        self.assertEqual(d.accept_final('{"text":"плей"}'),"play")
+        self.assertIsNone(d.accept_final('{"text":"бессмысленно"}'))
+    def test_revised_videomode(self):
+        self.assertEqual(dict(MODES)["ВК Видео — пробел"],0x20)

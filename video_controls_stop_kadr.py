@@ -2,6 +2,7 @@
 MODES=(
   ("Пробел — видеоплееры и браузеры",0x20),
   ("K — YouTube",0x4B),
+  ("ВК Видео — пробел",0x20),
   ("Мультимедиа — Windows Play/Pause",0xB3),
 )
 class PlaybackGuard:

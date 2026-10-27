@@ -4,6 +4,8 @@ from pathlib import Path
 from tkinter import ttk, messagebox
 from voice_engine_stop_kadr import GRAMMAR, decode_result
 from video_controls_stop_kadr import MODES, PlaybackGuard, apply_command
+from fast_voice_stop_kadr import FastVoiceDetector
+from windows_video_stop_kadr import send_input_key, list_windows, activate_target
 
 TITLE="Стоп кадр"
 MODEL="vosk-model-small-ru-0.22"
@@ -29,9 +31,7 @@ def this_window(hwnd):
     return pid.value==os.getpid()
 
 def send_key(vk):
-    u=ctypes.windll.user32
-    u.keybd_event(vk,0,0,0)
-    u.keybd_event(vk,0,2,0)
+    send_input_key(vk)
 
 class App(tk.Tk):
     def __init__(self):
@@ -53,13 +53,16 @@ class App(tk.Tk):
         self.guard=PlaybackGuard()
         self.mic_var=tk.StringVar()
         self.mode_var=tk.StringVar(value=MODES[0][0])
+        self.target_var=tk.StringVar(value="Автоматически (активное окно)")
+        self.target_hwnds={}
         self.status=tk.StringVar(value="Ожидание запуска")
         self.subtitle=tk.StringVar(value="Выберите микрофон и нажмите «Начать»")
         self.last=tk.StringVar(value="Команда пока не прозвучала")
         self.devices=[]
         self.layout()
         self.read_mics()
-        self.after(85,self.poll)
+        self.refresh_targets()
+        self.after(30,self.poll)
 
     def layout(self):
         host=tk.Frame(self,bg="#edf4fc")
@@ -124,6 +127,17 @@ class App(tk.Tk):
             style="Stop.TCombobox",font=("Segoe UI",10),
             values=[name for name,value in MODES])
         self.methods.pack(side="left",fill="x",expand=True)
+        # In some browsers a keyboard event is ignored unless the video window
+        # itself is active. Select its window to bring it to foreground first.
+        targetrow=tk.Frame(page,bg=WHITE)
+        targetrow.pack(fill="x",padx=19,pady=(0,9))
+        label(targetrow,"Окно видео",11,bold=True).pack(side="left",padx=(0,10))
+        self.targets=ttk.Combobox(targetrow,textvariable=self.target_var,
+             state="readonly",style="Stop.TCombobox",font=("Segoe UI",10))
+        self.targets.pack(side="left",fill="x",expand=True)
+        tk.Button(targetrow,text="↻ Обновить",command=self.refresh_targets,
+             bg="#e4efff",fg=NAVY,font=("Segoe UI",10),
+             relief="flat",padx=9,pady=6).pack(side="right",padx=(7,0))
         pane=tk.Frame(page,bg="#e3efff",highlightthickness=1,
                       highlightbackground="#d1e2f8",padx=13,pady=12)
         pane.pack(fill="x",padx=19,pady=(0,12))
@@ -145,12 +159,22 @@ class App(tk.Tk):
         label(info,"ⓘ",21,BLUE,True).pack(side="left",padx=(0,12))
         tt=tk.Frame(info,bg="#e4efff")
         tt.pack(side="left",fill="x",expand=True)
-        label(tt,"Откройте видеоплеер на переднем плане. Если пробел "
-              "не работает, выберите другой режим управления.",10,
+        label(tt,"Для VK Видео выберите режим «ВК Видео», затем окно браузера "
+              "в строке «Окно видео» и нажмите на самом видео один раз.",10,
               "#194276",wraplength=530,justify="left").pack(anchor="w")
         tk.Label(tt,textvariable=self.last,bg="#e4efff",fg=MUTED,
                  font=("Segoe UI",10),wraplength=530,
                  justify="left").pack(anchor="w",pady=(5,0))
+
+    def refresh_targets(self):
+        selected=self.target_var.get()
+        self.target_hwnds={"Автоматически (активное окно)":None}
+        for hwnd,title in list_windows():
+            name=f"{title[:67]}  [{hwnd}]"
+            self.target_hwnds[name]=hwnd
+        self.targets["values"]=list(self.target_hwnds)
+        self.target_var.set(selected if selected in self.target_hwnds
+                            else "Автоматически (активное окно)")
 
     def read_mics(self):
         self.devices=[("По умолчанию (Windows)",None)]
@@ -179,6 +203,7 @@ class App(tk.Tk):
         device=next((n for name,n in self.devices
                      if name==self.mic_var.get()),None)
         self.guard.clear()
+        self.last_heard=0.0
         self.stop_event.clear()
         self.running=True
         self.mics.config(state="disabled")
@@ -199,22 +224,26 @@ class App(tk.Tk):
             model=Model(folder)
             rate=int(sd.query_devices(device,"input")["default_samplerate"])
             recognizer=KaldiRecognizer(model,rate,GRAMMAR)
+            detector=FastVoiceDetector(min_stable_seconds=0.10)
             def audio_callback(data,frames,ts,status):
                 if not self.stop_event.is_set():
                     try: q.put_nowait(bytes(data))
                     except queue.Full: pass
-            with sd.RawInputStream(samplerate=rate,blocksize=4000,device=device,
+            with sd.RawInputStream(samplerate=rate,blocksize=1600,device=device,
                     dtype="int16",channels=1,callback=audio_callback):
                 self.queue.put(("ready",None))
                 while not self.stop_event.is_set():
                     try: data=q.get(timeout=.2)
                     except queue.Empty: continue
-                    if recognizer.AcceptWaveform(data):
-                        command=decode_result(recognizer.Result())
-                        now=time.monotonic()
-                        if command and now-self.last_heard>=.8:
-                            self.last_heard=now
-                            self.queue.put(("command",command))
+                    finished=recognizer.AcceptWaveform(data)
+                    now=time.monotonic()
+                    if finished:
+                        command=detector.accept_final(recognizer.Result())
+                    else:
+                        command=detector.accept_partial(recognizer.PartialResult(),now)
+                    if command and now-self.last_heard>=0.20:
+                        self.last_heard=now
+                        self.queue.put(("command",command))
         except Exception as ex:
             self.queue.put(("error",str(ex)))
         finally:
@@ -229,7 +258,15 @@ class App(tk.Tk):
                     self.subtitle.set("Слушаю команды «Стоп» и «Плей»")
                 elif event=="command":
                     try:
-                        hwnd=foreground()
+                        chosen=self.target_hwnds.get(self.target_var.get())
+                        if chosen is not None:
+                            ok,info=activate_target(chosen)
+                            if not ok:
+                                self.last.set("Окно видео: "+info)
+                                continue
+                            hwnd=chosen
+                        else:
+                            hwnd=foreground()
                         message=apply_command(value,self.mode_var.get(),hwnd,
                            this_window(hwnd),self.guard,send_key)
                         self.last.set(("Стоп" if value=="pause" else "Плей")+" — "+message)
@@ -250,7 +287,7 @@ class App(tk.Tk):
         except queue.Empty:
             pass
         if self.winfo_exists():
-            self.after(85,self.poll)
+            self.after(30,self.poll)
 
     def close(self):
         self.stop_event.set()
