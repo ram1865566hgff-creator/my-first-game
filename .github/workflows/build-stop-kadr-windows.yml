@@ -1,0 +1,40 @@
+name: Build Stop Kadr Windows EXE
+on:
+  push:
+    branches: [stop-kadr-windows]
+  workflow_dispatch:
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: '1'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-stop-kadr.txt pyinstaller==6.16.0
+      - name: Tests
+        run: python -m unittest discover -s tests_stop_kadr -v
+      - name: Model
+        run: python download_model_stop_kadr.py
+      - name: Icon
+        run: python make_stop_kadr_icon.py
+      - name: Build
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "Стоп кадр" --icon stop_kadr_assets/stop_kadr.ico --add-data "models;models" --add-data "stop_kadr_assets;assets" --collect-all vosk --collect-all sounddevice --hidden-import cffi --hidden-import _cffi_backend stop_kadr.py
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stop-Kadr-Windows-EXE
+          path: "dist/Стоп кадр.exe"
+          if-no-files-found: error
+          retention-days: 30
