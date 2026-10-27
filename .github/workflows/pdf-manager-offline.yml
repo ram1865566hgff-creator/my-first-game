@@ -27,6 +27,8 @@ jobs:
           '@ | Set-Content -Encoding UTF8 extract_payload.py
           python extract_payload.py
           if ($LASTEXITCODE -ne 0) { throw "Could not extract project" }
+          python -m pip install Pillow
+          if ($LASTEXITCODE -ne 0) { throw "Pillow installation failed" }
           python generate_icon.py
           if ($LASTEXITCODE -ne 0) { throw "Icon generation failed" }
       - name: Install build-time Python packages
