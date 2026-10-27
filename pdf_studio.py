@@ -134,7 +134,7 @@ class Studio:
         path=filedialog.askopenfilename(title="Открыть PDF",filetypes=[("PDF","*.pdf"),("Все файлы","*.*")])
         if not path:return
         try:
-            doc=fitz.open(path)
+            doc=fitz.open(stream=Path(path).read_bytes(),filetype="pdf")
             if doc.needs_pass:
                 password=simpledialog.askstring(APP,"Введите пароль PDF",show="*")
                 if not password or not doc.authenticate(password):
@@ -205,7 +205,6 @@ class Studio:
         px=(self.canvas.canvasx(event.x)-self.xoffset)/self.scale
         py=(self.canvas.canvasy(event.y)-self.yoffset)/self.scale
         for text,rect,size in self.line_data:
-            if rect + (-2,-2,2,2) if False else False: pass
             if (rect.x0-3<=px<=rect.x1+3 and rect.y0-3<=py<=rect.y1+3):
                 self.selected=(text,rect,size)
                 self.selection.configure(text=f"Выбрано: {text[:120]}")
