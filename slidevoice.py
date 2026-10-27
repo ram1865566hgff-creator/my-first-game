@@ -66,7 +66,7 @@ class SlaidVpered(tk.Tk):
         self.last_trigger = 0.0
         # A single spoken phrase may generate multiple final recognition results.
         # Keep a separate idempotency guard for slide transitions.
-        self.slide_guard = SlideCommandGuard(window_seconds=2.7)
+        self.slide_guard = SlideCommandGuard(window_seconds=0.45)
         self.mics = []
         self.mic_choice = tk.StringVar()
         self.status = tk.StringVar(value="Ожидание запуска")
@@ -304,7 +304,7 @@ class SlaidVpered(tk.Tk):
                     if recognizer.AcceptWaveform(data):
                         action = decode_result(recognizer.Result())
                         now = time.monotonic()
-                        if action and now - self.last_trigger >= 1.0:
+                        if action and now - self.last_trigger >= 0.20:
                             self.last_trigger = now
                             self.events.put(("action", action))
         except Exception as exc:
@@ -328,8 +328,8 @@ class SlaidVpered(tk.Tk):
                         "slide_previous": "Предыдущий слайд",
                     }
                     word = names[value]
-                    # Ignore a second recognized "Следующий/Предыдущий слайд"
-                    # from the same utterance, even if separated by >1 second.
+                    # Ignore near-simultaneous duplicate results only.
+                    # A new intentional command may follow immediately after the phrase.
                     if not self.slide_guard.accept(value, time.monotonic()):
                         self.recent.set(word + " — повтор распознавания пропущен")
                         continue

@@ -78,29 +78,45 @@ if __name__ == "__main__":
 from navigation_guard import SlideCommandGuard
 
 class RepeatedVoiceTests(unittest.TestCase):
-    def test_single_phrase_cannot_skip_two_slides(self):
-        guard = SlideCommandGuard(window_seconds=2.7)
-        self.assertTrue(guard.accept("slide_next", 10.0))
-        # Two recognizer results for one spoken "следующий слайд".
-        self.assertFalse(guard.accept("slide_next", 11.3))
-        self.assertFalse(guard.accept("slide_next", 12.4))
-        self.assertTrue(guard.accept("slide_next", 12.8))
+    def test_next_command_on_every_utterance(self):
+        guard = SlideCommandGuard(window_seconds=0.45)
+        self.assertTrue(guard.accept("slide_next", 10.00))
+        # Duplicated recognizer event inside a fraction of a second.
+        self.assertFalse(guard.accept("slide_next", 10.12))
+        # Two intentional spoken phrases follow one another normally.
+        self.assertTrue(guard.accept("slide_next", 10.9))
+        self.assertTrue(guard.accept("slide_next", 11.8))
+        self.assertTrue(guard.accept("slide_next", 12.7))
 
-    def test_backwards_independent(self):
-        guard = SlideCommandGuard()
-        self.assertTrue(guard.accept("slide_next", 1.0))
-        self.assertTrue(guard.accept("slide_previous", 1.2))
-        self.assertFalse(guard.accept("slide_previous", 2.2))
-        self.assertTrue(guard.accept("slide_next", 2.3))
+    def test_previous_command_on_every_utterance(self):
+        guard=SlideCommandGuard()
+        for t in (1.0, 1.9, 2.8, 3.7, 4.6):
+            self.assertTrue(guard.accept("slide_previous", t))
+        self.assertFalse(guard.accept("slide_previous", 4.82))
 
-    def test_animations_not_blocked(self):
-        guard = SlideCommandGuard()
-        self.assertTrue(guard.accept("animation_next", 1.0))
-        self.assertTrue(guard.accept("animation_next", 1.1))
-        self.assertTrue(guard.accept("animation_previous", 1.15))
-
-    def test_reset_on_new_session(self):
+    def test_immediate_change_of_direction(self):
         guard=SlideCommandGuard()
         self.assertTrue(guard.accept("slide_next", 5.0))
+        self.assertTrue(guard.accept("slide_previous", 5.12))
+        self.assertTrue(guard.accept("slide_next", 5.24))
+
+    def test_animation_commands_never_locked(self):
+        guard=SlideCommandGuard()
+        for action in ("animation_next","animation_next","animation_previous"):
+            self.assertTrue(guard.accept(action,5.0))
+
+    def test_session_reset(self):
+        guard=SlideCommandGuard()
+        self.assertTrue(guard.accept("slide_next",5.0))
         guard.reset()
-        self.assertTrue(guard.accept("slide_next", 5.1))
+        self.assertTrue(guard.accept("slide_next",5.1))
+
+    def test_integration_five_real_commands_one_slide_each(self):
+        guard=SlideCommandGuard()
+        slide=1
+        transitions=[]
+        for now in (10.0, 10.12, 11.05, 12.10, 13.15, 14.20):
+            if guard.accept("slide_next",now):
+                slide+=1
+                transitions.append(slide)
+        self.assertEqual(transitions,[2,3,4,5,6])
